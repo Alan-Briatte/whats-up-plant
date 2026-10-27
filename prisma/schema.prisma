@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  plants       Plant[]
+}
+
+model Plant {
+  id                   String            @id @default(cuid())
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname             String
+  species              String
+  scientificName       String?
+  imageUrl             String?
+  location             String            @default("Salon")
+  wateringIntervalDays Int               @default(7)
+  lastWateredAt        DateTime          @default(now())
+  nextWateringAt       DateTime
+  lightRequirement     String            @default("Lumière indirecte vive")
+  humidityRequirement  String            @default("Moyenne (40-60%)")
+  careNotes            String?
+  healthStatus         String            @default("HEALTHY") // HEALTHY | WARNING | CRITICAL
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  wateringLogs         WateringLog[]
+  diagnoses            HealthDiagnosis[]
+
+  @@index([userId])
+  @@index([nextWateringAt])
+}
+
+model WateringLog {
+  id        String   @id @default(cuid())
+  plantId   String
+  plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  wateredAt DateTime @default(now())
+  notes     String?
+
+  @@index([plantId])
+}
+
+model HealthDiagnosis {
+  id            String   @id @default(cuid())
+  plantId       String?
+  plant         Plant?   @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  userId        String
+  imageUrl      String?
+  plantDetected String?
+  status        String   // HEALTHY | WARNING | CRITICAL
+  confidence    Int      @default(85)
+  summary       String
+  issuesJson    String   // JSON string of detected issues
+  treatmentJson String   // JSON string of recommended treatment steps
+  createdAt     DateTime @default(now())
+
+  @@index([plantId])
+  @@index([userId])
+}
