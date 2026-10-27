@@ -1,3 +1,5 @@
+import fs from "fs/promises";
+import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 
 const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
@@ -68,6 +70,26 @@ async function resolveImageData(imageBase64OrUrl: string): Promise<{
       return {
         mimeType: contentType,
         data: base64,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  if (imageBase64OrUrl.startsWith("/uploads/")) {
+    try {
+      const diskPath = path.join(process.cwd(), "public", imageBase64OrUrl);
+      const buf = await fs.readFile(diskPath);
+      const ext = path.extname(diskPath).toLowerCase();
+      const mimeType =
+        ext === ".png"
+          ? "image/png"
+          : ext === ".webp"
+          ? "image/webp"
+          : "image/jpeg";
+      return {
+        mimeType,
+        data: buf.toString("base64"),
       };
     } catch {
       return null;
@@ -414,14 +436,24 @@ export async function identifyPlantFromImage(
 }
 
 export async function diagnosePlantHealth(
-  imageBase64: string,
+  imagesInput: string | string[],
   userSymptoms?: string,
   plantSpecies?: string
 ): Promise<PlantDiagnosisResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
-  const parsed = await resolveImageData(imageBase64);
+  const rawList = Array.isArray(imagesInput)
+    ? imagesInput
+    : imagesInput
+    ? [imagesInput]
+    : [];
 
-  if (!apiKey || !parsed) {
+  const parsedImages: { mimeType: string; data: string }[] = [];
+  for (const img of rawList) {
+    const resolved = await resolveImageData(img);
+    if (resolved) parsedImages.push(resolved);
+  }
+
+  if (!apiKey || parsedImages.length === 0) {
     return getDemoDiagnosis(userSymptoms, plantSpecies);
   }
 
@@ -434,16 +466,18 @@ export async function diagnosePlantHealth(
         {
           role: "user",
           parts: [
-            {
+            ...parsedImages.map((img) => ({
               inlineData: {
-                mimeType: parsed.mimeType,
-                data: parsed.data,
+                mimeType: img.mimeType,
+                data: img.data,
               },
-            },
+            })),
             {
-              text: `Tu es un phytopathologiste et expert en plantes d'intérieur. Analyse cette photo de plante${
-                plantSpecies ? ` (Espèce connue : ${plantSpecies})` : ""
-              }${
+              text: `Tu es un phytopathologiste et expert en plantes d'intérieur. Analyse ${
+                parsedImages.length > 1
+                  ? `ces ${parsedImages.length} photos de la plante`
+                  : "cette photo de plante"
+              }${plantSpecies ? ` (Espèce connue : ${plantSpecies})` : ""}${
                 userSymptoms
                   ? ` (Observations de l'utilisateur : "${userSymptoms}")`
                   : ""

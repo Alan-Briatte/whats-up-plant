@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
@@ -20,13 +22,32 @@ export async function GET(
       },
       diagnoses: {
         orderBy: { createdAt: "desc" },
-        take: 10,
+        take: 15,
       },
     },
   });
 
   if (!plant) {
     return NextResponse.json({ error: "Plante introuvable" }, { status: 404 });
+  }
+
+  // Ensure imagesJson is always populated even if dev server PrismaClient was cached before migration
+  try {
+    const rawDiagImages = await prisma.$queryRaw<
+      Array<{ id: string; imageUrl: string | null; imagesJson: string | null }>
+    >`SELECT id, imageUrl, imagesJson FROM HealthDiagnosis WHERE plantId = ${plant.id}`;
+
+    const mapById = new Map(rawDiagImages.map((r) => [r.id, r]));
+    plant.diagnoses = plant.diagnoses.map((d) => {
+      const raw = mapById.get(d.id);
+      return {
+        ...d,
+        imageUrl: raw?.imageUrl ?? d.imageUrl,
+        imagesJson: raw?.imagesJson ?? (d as { imagesJson?: string }).imagesJson ?? "[]",
+      };
+    });
+  } catch {
+    // Fallback if column not yet pushed
   }
 
   return NextResponse.json({ plant });

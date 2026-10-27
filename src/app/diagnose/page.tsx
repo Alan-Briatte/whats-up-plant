@@ -14,8 +14,9 @@ import {
   ClipboardList,
   Bug,
   HeartPulse,
+  Images,
 } from "lucide-react";
-import { ImagePicker } from "@/components/ImagePicker";
+import { MultiImagePicker } from "@/components/MultiImagePicker";
 import { PlantDiagnosisResult } from "@/lib/gemini";
 
 const SYMPTOM_CHIPS = [
@@ -34,44 +35,40 @@ interface UserPlantOption {
   imageUrl: string | null;
 }
 
+interface DiagnosisResponseWithImages extends PlantDiagnosisResult {
+  id?: string;
+  images?: string[];
+}
+
 function DiagnoseContent() {
   const searchParams = useSearchParams();
   const initialPlantId = searchParams.get("plantId") || "";
 
   const [plants, setPlants] = useState<UserPlantOption[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState(initialPlantId);
-  const [imageUrl, setImageUrl] = useState("");
+  const [images, setImages] = useState<string[]>([]);
   const [symptoms, setSymptoms] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<PlantDiagnosisResult | null>(null);
+  const [result, setResult] = useState<DiagnosisResponseWithImages | null>(
+    null
+  );
 
   useEffect(() => {
     fetch("/api/plants")
       .then((res) => res.json())
       .then((data) => {
-        if (data.plants) {
+        if (data.plants && Array.isArray(data.plants)) {
           setPlants(data.plants);
           if (initialPlantId) {
-            const match = data.plants.find(
-              (p: UserPlantOption) => p.id === initialPlantId
-            );
-            if (match && match.imageUrl) {
-              setImageUrl(match.imageUrl);
-            }
+            setSelectedPlantId(initialPlantId);
+          } else if (data.plants.length === 1) {
+            setSelectedPlantId(data.plants[0].id);
           }
         }
       })
       .catch(() => {});
   }, [initialPlantId]);
-
-  const handlePlantSelect = (id: string) => {
-    setSelectedPlantId(id);
-    const match = plants.find((p) => p.id === id);
-    if (match && match.imageUrl && !imageUrl) {
-      setImageUrl(match.imageUrl);
-    }
-  };
 
   const toggleSymptomChip = (chip: string) => {
     if (symptoms.includes(chip)) {
@@ -84,9 +81,9 @@ function DiagnoseContent() {
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!imageUrl) {
+    if (images.length === 0) {
       setError(
-        "Veuillez prendre ou sélectionner une photo de la plante ou de la feuille malade."
+        "Veuillez ajouter au moins une photo de la plante ou des feuilles touchées."
       );
       return;
     }
@@ -98,7 +95,7 @@ function DiagnoseContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: imageUrl,
+          images,
           symptoms,
           plantId: selectedPlantId || null,
         }),
@@ -121,11 +118,13 @@ function DiagnoseContent() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <Link
-          href="/"
+          href={selectedPlantId ? `/plants/${selectedPlantId}` : "/"}
           className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 hover:text-botanical-800"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour au tableau de bord
+          {selectedPlantId
+            ? "Retour au profil de la plante"
+            : "Retour au tableau de bord"}
         </Link>
       </div>
 
@@ -137,12 +136,12 @@ function DiagnoseContent() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">
-              Docteur Plante IA — Diagnostic & Soins 🩺
+              Docteur Plante IA — Diagnostic & Carnet Photo 🩺
             </h1>
             <p className="mt-1 text-sm text-botanical-100">
-              Photographiez une feuille ou votre plante entière : l&apos;IA
-              détecte les maladies, parasites ou carences et génère un protocole
-              de soin sur mesure.
+              Ajoutez une ou plusieurs photos (feuille touchée, tige, terreau) :
+              l&apos;IA analyse le problème et conserve toutes les photos dans
+              le carnet de santé de votre plante.
             </p>
           </div>
         </div>
@@ -162,15 +161,16 @@ function DiagnoseContent() {
         {/* Link to existing plant */}
         <div>
           <label className="mb-1.5 block text-sm font-semibold text-stone-800">
-            1. Associer à l&apos;une de vos plantes (optionnel)
+            1. Plante concernée (pour archiver le diagnostic et les photos dans
+            son carnet de santé)
           </label>
           <select
             value={selectedPlantId}
-            onChange={(e) => handlePlantSelect(e.target.value)}
+            onChange={(e) => setSelectedPlantId(e.target.value)}
             className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-sm focus:border-botanical-600 focus:bg-white focus:outline-none"
           >
             <option value="">
-              -- Diagnostic libre (sans associer à un profil existant) --
+              -- Diagnostic libre (non rattaché à une plante) --
             </option>
             {plants.map((p) => (
               <option key={p.id} value={p.id}>
@@ -180,11 +180,12 @@ function DiagnoseContent() {
           </select>
         </div>
 
-        {/* Photo Picker */}
-        <ImagePicker
-          value={imageUrl}
-          onChange={setImageUrl}
-          label="2. Photo de la plante ou des feuilles touchées *"
+        {/* Multi Photo Picker */}
+        <MultiImagePicker
+          values={images}
+          onChange={setImages}
+          label="2. Photos illustrant le problème (jusqu'à 6 photos) *"
+          maxImages={6}
         />
 
         {/* Symptoms */}
@@ -215,7 +216,7 @@ function DiagnoseContent() {
             rows={2}
             value={symptoms}
             onChange={(e) => setSymptoms(e.target.value)}
-            placeholder="Décrivez ce que vous observez (ex: feuilles qui jaunissent depuis 1 semaine, terreau humide...)"
+            placeholder="Décrivez ce que vous observez (ex: feuilles qui jaunissent depuis 1 semaine, taches sous les feuilles...)"
             className="w-full rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm focus:border-botanical-600 focus:bg-white focus:outline-none"
           />
         </div>
@@ -228,12 +229,13 @@ function DiagnoseContent() {
           {loading ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
-              Analyse phytopathologique en cours...
+              Analyse des {images.length} photo{images.length > 1 ? "s" : ""}{" "}
+              et sauvegarde...
             </>
           ) : (
             <>
               <Sparkles className="h-5 w-5" />
-              Lancer le diagnostic IA & obtenir le plan de soin
+              Lancer le diagnostic IA & enregistrer les photos
             </>
           )}
         </button>
@@ -297,6 +299,31 @@ function DiagnoseContent() {
                 : "Plante en bonne santé"}
             </span>
           </div>
+
+          {/* Saved Photos Gallery */}
+          {result.images && result.images.length > 0 && (
+            <div className="space-y-2.5">
+              <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-stone-600">
+                <Images className="h-4 w-4 text-botanical-700" />
+                Photos archivées dans le diagnostic ({result.images.length})
+              </h3>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {result.images.map((src, i) => (
+                  <div
+                    key={i}
+                    className="aspect-[4/3] overflow-hidden rounded-xl border border-stone-200 bg-stone-100"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`Photo archivée ${i + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Summary */}
           <div className="rounded-2xl bg-botanical-50/70 border border-botanical-200/80 p-4 text-sm text-stone-800 leading-relaxed">
@@ -398,15 +425,17 @@ function DiagnoseContent() {
           )}
 
           {selectedPlantId && (
-            <div className="flex items-center justify-between border-t border-stone-100 pt-4 text-xs text-stone-600">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-4 text-xs text-stone-600">
               <span>
-                ✅ Ce diagnostic a été enregistré sur la fiche de votre plante.
+                ✅ Ce diagnostic et ses{" "}
+                <strong>{result.images?.length || 1} photo(s)</strong> ont été
+                enregistrés dans le carnet de santé de votre plante.
               </span>
               <Link
                 href={`/plants/${selectedPlantId}`}
-                className="font-semibold text-botanical-700 hover:underline"
+                className="rounded-xl bg-botanical-700 px-4 py-2 font-semibold text-white hover:bg-botanical-800 transition-colors"
               >
-                Voir le profil de la plante →
+                Ouvrir le Carnet de Santé de la plante →
               </Link>
             </div>
           )}

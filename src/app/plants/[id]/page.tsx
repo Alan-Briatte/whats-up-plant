@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,9 +19,16 @@ import {
   CheckCircle2,
   History,
   FileText,
+  Camera,
+  Images,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  Loader2,
 } from "lucide-react";
 import { getWateringUrgency } from "@/lib/utils";
 import { DiagnosisIssue, DiagnosisTreatmentStep } from "@/lib/gemini";
+import { compressImageFile } from "@/components/MultiImagePicker";
 
 interface WateringLog {
   id: string;
@@ -31,6 +38,8 @@ interface WateringLog {
 
 interface HealthDiagnosisRecord {
   id: string;
+  imageUrl: string | null;
+  imagesJson: string;
   status: string;
   confidence: number;
   summary: string;
@@ -57,6 +66,28 @@ interface PlantDetail {
   diagnoses: HealthDiagnosisRecord[];
 }
 
+function getDiagnosisPhotos(diag: HealthDiagnosisRecord): string[] {
+  const photos: string[] = [];
+  if (diag.imagesJson) {
+    try {
+      const parsed = JSON.parse(diag.imagesJson);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (typeof item === "string" && item.trim()) {
+            photos.push(item);
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (diag.imageUrl && diag.imageUrl.trim() && !photos.includes(diag.imageUrl)) {
+    photos.unshift(diag.imageUrl);
+  }
+  return photos;
+}
+
 export default function PlantDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -71,6 +102,21 @@ export default function PlantDetailPage() {
   const [editLocation, setEditLocation] = useState("");
   const [editInterval, setEditInterval] = useState(7);
   const [editCareNotes, setEditCareNotes] = useState("");
+
+  // Carnet de Santé photo management
+  const addPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [activeDiagIdForUpload, setActiveDiagIdForUpload] = useState<
+    string | null
+  >(null);
+  const [uploadingDiagId, setUploadingDiagId] = useState<string | null>(null);
+
+  // Lightbox state
+  const [lightbox, setLightbox] = useState<{
+    diagId: string;
+    photos: string[];
+    index: number;
+    dateLabel: string;
+  } | null>(null);
 
   const fetchPlant = useCallback(async () => {
     try {
@@ -149,6 +195,59 @@ export default function PlantDetailPage() {
     }
   };
 
+  const triggerAddPhotosToDiagnosis = (diagId: string) => {
+    setActiveDiagIdForUpload(diagId);
+    addPhotoInputRef.current?.click();
+  };
+
+  const handleAddPhotosChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !activeDiagIdForUpload) return;
+
+    const targetDiagId = activeDiagIdForUpload;
+    setUploadingDiagId(targetDiagId);
+
+    try {
+      const compressedList: string[] = [];
+      for (const file of Array.from(files).slice(0, 6)) {
+        const dataUrl = await compressImageFile(file);
+        if (dataUrl) compressedList.push(dataUrl);
+      }
+
+      if (compressedList.length > 0) {
+        const res = await fetch(`/api/diagnoses/${targetDiagId}/photos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ images: compressedList }),
+        });
+        if (res.ok) {
+          await fetchPlant();
+        }
+      }
+    } finally {
+      setUploadingDiagId(null);
+      setActiveDiagIdForUpload(null);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemovePhotoFromDiagnosis = async (
+    diagId: string,
+    photoUrl: string
+  ) => {
+    const res = await fetch(`/api/diagnoses/${diagId}/photos`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photoUrl }),
+    });
+    if (res.ok) {
+      setLightbox(null);
+      await fetchPlant();
+    }
+  };
+
   if (loading || !plant) {
     return (
       <div className="py-20 text-center text-sm text-stone-500">
@@ -158,9 +257,111 @@ export default function PlantDetailPage() {
   }
 
   const urgency = getWateringUrgency(plant.nextWateringAt);
+  const totalHealthPhotos = plant.diagnoses.reduce(
+    (acc, d) => acc + getDiagnosisPhotos(d).length,
+    0
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      {/* Hidden input to add photos to an existing diagnosis in Carnet de Santé */}
+      <input
+        ref={addPhotoInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleAddPhotosChange}
+        className="hidden"
+      />
+
+      {/* Lightbox Modal for Carnet de Santé Photos */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full overflow-hidden rounded-3xl bg-stone-900 border border-white/15 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5 text-white">
+              <div>
+                <p className="text-sm font-bold">
+                  Carnet de Santé — {plant.nickname}
+                </p>
+                <p className="text-xs text-stone-400">
+                  Diagnostic du {lightbox.dateLabel} • Photo{" "}
+                  {lightbox.index + 1} sur {lightbox.photos.length}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleRemovePhotoFromDiagnosis(
+                      lightbox.diagId,
+                      lightbox.photos[lightbox.index]
+                    )
+                  }
+                  className="flex items-center gap-1 rounded-xl bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/30 transition-colors"
+                  title="Supprimer cette photo du carnet"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Supprimer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightbox(null)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="relative flex aspect-[16/11] w-full items-center justify-center bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={lightbox.photos[lightbox.index]}
+                alt="Zoom photo diagnostic"
+                className="max-h-[70vh] w-full object-contain"
+              />
+
+              {lightbox.photos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLightbox({
+                        ...lightbox,
+                        index:
+                          (lightbox.index - 1 + lightbox.photos.length) %
+                          lightbox.photos.length,
+                      })
+                    }
+                    className="absolute left-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLightbox({
+                        ...lightbox,
+                        index: (lightbox.index + 1) % lightbox.photos.length,
+                      })
+                    }
+                    className="absolute right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="flex items-center justify-between">
         <Link
@@ -394,9 +595,9 @@ export default function PlantDetailPage() {
       </div>
 
       {/* Bottom 2 Columns: Watering Tracker & Health Diagnoses */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Watering Tracker */}
-        <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
+      <div className="grid gap-6 lg:grid-cols-12">
+        {/* Watering Tracker (5 cols) */}
+        <div className="lg:col-span-5 rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-5 h-fit">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
@@ -437,7 +638,7 @@ export default function PlantDetailPage() {
               className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
             >
               <Droplets className="h-4 w-4" />
-              {watering ? "Enregistrement..." : "Arroser maintenant"}
+              {watering ? "Enregistrement..." : "Arroser"}
             </button>
           </form>
 
@@ -446,7 +647,7 @@ export default function PlantDetailPage() {
               <History className="h-3.5 w-3.5" />
               Historique des arrosages ({plant.wateringLogs.length})
             </h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {plant.wateringLogs.map((log) => (
                 <div
                   key={log.id}
@@ -469,46 +670,59 @@ export default function PlantDetailPage() {
           </div>
         </div>
 
-        {/* AI Diagnoses History */}
-        <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
-          <div className="flex items-center justify-between">
+        {/* AI Diagnoses History & Photo Stock (7 cols) */}
+        <div className="lg:col-span-7 rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-botanical-100 text-botanical-700">
                 <Stethoscope className="h-5 w-5" />
               </div>
               <div>
                 <h2 className="text-base font-bold text-stone-900">
-                  Carnet de Santé IA ({plant.diagnoses.length})
+                  Carnet de Santé & Galerie Photos ({plant.diagnoses.length})
                 </h2>
                 <p className="text-xs text-stone-500">
-                  Diagnostics de maladies et plans de soin enregistrés
+                  {totalHealthPhotos} photo{totalHealthPhotos > 1 ? "s" : ""} en
+                  stock • Suivi de l&apos;évolution et des soins
                 </p>
               </div>
             </div>
 
             <Link
               href={`/diagnose?plantId=${plant.id}`}
-              className="rounded-xl bg-botanical-50 border border-botanical-200 px-3 py-1.5 text-xs font-semibold text-botanical-800 hover:bg-botanical-100"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-botanical-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-botanical-800 transition-colors"
             >
-              + Nouveau diagnostic
+              <Camera className="h-3.5 w-3.5" />
+              + Nouveau diagnostic photo
             </Link>
           </div>
 
           {plant.diagnoses.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-stone-200 p-8 text-center">
+              <Images className="mx-auto mb-2 h-8 w-8 text-stone-400" />
               <p className="text-sm font-medium text-stone-700">
-                Aucun diagnostic enregistré pour cette plante
+                Aucun diagnostic ni photo de santé pour cette plante
               </p>
               <p className="mt-1 text-xs text-stone-500">
-                Prenez une photo d&apos;une feuille si vous observez des taches
-                ou un jaunissement.
+                Prenez des photos des feuilles ou des tiges pour diagnostiquer
+                un problème et conserver l&apos;historique visuel dans ce carnet.
               </p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-4">
               {plant.diagnoses.map((diag) => {
                 let issues: DiagnosisIssue[] = [];
                 let treatments: DiagnosisTreatmentStep[] = [];
+                const photos = getDiagnosisPhotos(diag);
+                const dateLabel = new Date(diag.createdAt).toLocaleDateString(
+                  "fr-FR",
+                  {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  }
+                );
+
                 try {
                   issues = JSON.parse(diag.issuesJson);
                   const parsedT = JSON.parse(diag.treatmentJson);
@@ -520,34 +734,91 @@ export default function PlantDetailPage() {
                 return (
                   <div
                     key={diag.id}
-                    className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 space-y-2.5"
+                    className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 space-y-3"
                   >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          diag.status === "CRITICAL"
-                            ? "bg-red-100 text-red-800"
+                    {/* Header of diagnosis */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            diag.status === "CRITICAL"
+                              ? "bg-red-100 text-red-800"
+                              : diag.status === "WARNING"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {diag.status === "CRITICAL"
+                            ? "Critique"
                             : diag.status === "WARNING"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-emerald-100 text-emerald-800"
-                        }`}
+                            ? "Attention"
+                            : "Saine"}{" "}
+                          ({diag.confidence}%)
+                        </span>
+                        <span className="text-xs font-medium text-stone-500">
+                          {dateLabel}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={uploadingDiagId === diag.id}
+                        onClick={() => triggerAddPhotosToDiagnosis(diag.id)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-300 bg-white px-2.5 py-1 text-xs font-semibold text-botanical-800 hover:bg-botanical-50 disabled:opacity-50 transition-colors"
                       >
-                        {diag.status === "CRITICAL"
-                          ? "Critique"
-                          : diag.status === "WARNING"
-                          ? "Attention"
-                          : "Saine"}{" "}
-                        ({diag.confidence}%)
-                      </span>
-                      <span className="text-xs text-stone-500">
-                        {new Date(diag.createdAt).toLocaleDateString("fr-FR", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
+                        {uploadingDiagId === diag.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Ajout...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="h-3.5 w-3.5 text-botanical-700" />
+                            + Ajouter des photos
+                          </>
+                        )}
+                      </button>
                     </div>
 
+                    {/* Photo Gallery stored in Carnet de Santé */}
+                    {photos.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="flex items-center gap-1.5 text-[11px] font-semibold text-stone-500">
+                          <Images className="h-3.5 w-3.5 text-botanical-700" />
+                          Photos du problème ({photos.length}) — cliquez pour
+                          agrandir :
+                        </p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {photos.map((photoSrc, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() =>
+                                setLightbox({
+                                  diagId: diag.id,
+                                  photos,
+                                  index: idx,
+                                  dateLabel,
+                                })
+                              }
+                              className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-stone-200 bg-stone-200 focus:outline-none focus:ring-2 focus:ring-botanical-600"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={photoSrc}
+                                alt={`Photo santé ${idx + 1}`}
+                                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/35 group-hover:opacity-100">
+                                <ZoomIn className="h-5 w-5 text-white drop-shadow" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Diagnosis text */}
                     <p className="text-xs text-stone-700 leading-relaxed">
                       {diag.summary}
                     </p>
@@ -560,9 +831,14 @@ export default function PlantDetailPage() {
                     )}
 
                     {treatments.length > 0 && (
-                      <div className="text-xs text-botanical-900 bg-botanical-50/90 rounded-xl p-2.5 border border-botanical-200/60">
-                        <strong>Soin recommandé :</strong> {treatments[0].title}{" "}
-                        — {treatments[0].description}
+                      <div className="text-xs text-botanical-900 bg-botanical-50/90 rounded-xl p-2.5 border border-botanical-200/60 space-y-1">
+                        <strong className="block">Plan de soin :</strong>
+                        {treatments.map((t) => (
+                          <div key={t.step}>
+                            • <strong>{t.title}</strong> : {t.description} (
+                            <em>{t.timeframe}</em>)
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

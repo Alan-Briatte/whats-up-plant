@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { diagnosePlantHealth } from "@/lib/gemini";
 import { prisma } from "@/lib/prisma";
+import { persistDiagnosisPhotos } from "@/lib/storage";
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -11,13 +12,23 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const imageBase64 = body.imageBase64 || "";
+    const rawImages: string[] = Array.isArray(body.images)
+      ? body.images.filter(
+          (img: unknown) => typeof img === "string" && img.trim()
+        )
+      : body.imageBase64
+      ? [String(body.imageBase64)]
+      : [];
+
     const symptoms = body.symptoms || "";
     const plantId = body.plantId || null;
 
-    if (!imageBase64) {
+    if (rawImages.length === 0) {
       return NextResponse.json(
-        { error: "Veuillez joindre une photo de la plante ou des feuilles." },
+        {
+          error:
+            "Veuillez joindre au moins une photo de la plante ou des feuilles.",
+        },
         { status: 400 }
       );
     }
@@ -32,17 +43,22 @@ export async function POST(req: Request) {
       }
     }
 
+    // 1. Analyze all photos with Gemini Vision
     const diagnosis = await diagnosePlantHealth(
-      imageBase64,
+      rawImages,
       symptoms,
       plantSpecies
     );
+
+    // 2. Normalize photos for storage in the plant's Carnet de Santé
+    const storedPhotoUrls = await persistDiagnosisPhotos(rawImages);
+    const imagesJsonStr = JSON.stringify(storedPhotoUrls);
 
     const saved = await prisma.healthDiagnosis.create({
       data: {
         userId: user.id,
         plantId: plantId || null,
-        imageUrl: imageBase64,
+        imageUrl: storedPhotoUrls[0] || null,
         plantDetected: diagnosis.plantDetected,
         status: diagnosis.status,
         confidence: diagnosis.confidence,
@@ -55,6 +71,13 @@ export async function POST(req: Request) {
       },
     });
 
+    // Save imagesJson via raw query so it succeeds even if Next.js dev server cached an older PrismaClient
+    try {
+      await prisma.$executeRaw`UPDATE HealthDiagnosis SET imagesJson = ${imagesJsonStr} WHERE id = ${saved.id}`;
+    } catch (e) {
+      console.warn("Could not update imagesJson column:", e);
+    }
+
     if (plantId) {
       await prisma.plant.updateMany({
         where: { id: plantId, userId: user.id },
@@ -66,6 +89,7 @@ export async function POST(req: Request) {
       diagnosis: {
         ...diagnosis,
         id: saved.id,
+        images: storedPhotoUrls,
         createdAt: saved.createdAt,
       },
     });

@@ -57,6 +57,7 @@ model HealthDiagnosis {
   plant         Plant?   @relation(fields: [plantId], references: [id], onDelete: Cascade)
   userId        String
   imageUrl      String?
+  imagesJson    String   @default("[]") // JSON array of all stored photo URLs
   plantDetected String?
   status        String   // HEALTHY | WARNING | CRITICAL
   confidence    Int      @default(85)
