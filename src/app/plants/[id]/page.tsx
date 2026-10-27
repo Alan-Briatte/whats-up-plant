@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ZoomIn,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { getWateringUrgency } from "@/lib/utils";
 import { DiagnosisIssue, DiagnosisTreatmentStep } from "@/lib/gemini";
@@ -102,6 +103,8 @@ export default function PlantDetailPage() {
   const [editLocation, setEditLocation] = useState("");
   const [editInterval, setEditInterval] = useState(7);
   const [editCareNotes, setEditCareNotes] = useState("");
+  const [generatingNickname, setGeneratingNickname] = useState(false);
+  const [seenNicknames, setSeenNicknames] = useState<string[]>([]);
 
   // Carnet de Santé photo management
   const addPhotoInputRef = useRef<HTMLInputElement | null>(null);
@@ -176,6 +179,35 @@ export default function PlantDetailPage() {
     if (res.ok) {
       setEditing(false);
       await fetchPlant();
+    }
+  };
+
+  const handleGenerateAnotherNickname = async () => {
+    if (!plant) return;
+    setGeneratingNickname(true);
+    try {
+      const excludeList = Array.from(
+        new Set([...seenNicknames, editNickname, plant.nickname].filter(Boolean))
+      );
+      const res = await fetch("/api/ai/nickname", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          species: plant.species,
+          scientificName: plant.scientificName || "",
+          location: editLocation || plant.location,
+          exclude: excludeList,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.nickname) {
+        setEditNickname(data.nickname);
+        setSeenNicknames((prev) =>
+          Array.from(new Set([...prev, data.nickname]))
+        );
+      }
+    } finally {
+      setGeneratingNickname(false);
     }
   };
 
@@ -431,9 +463,25 @@ export default function PlantDetailPage() {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      Surnom
-                    </label>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <label className="block text-xs font-semibold text-stone-700">
+                        Surnom
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleGenerateAnotherNickname}
+                        disabled={generatingNickname}
+                        className="inline-flex items-center gap-1 rounded-lg bg-botanical-50 border border-botanical-200 px-2 py-0.5 text-[11px] font-semibold text-botanical-800 hover:bg-botanical-100 disabled:opacity-50"
+                        title="Générer un autre surnom"
+                      >
+                        <RefreshCw
+                          className={`h-3 w-3 text-botanical-700 ${
+                            generatingNickname ? "animate-spin" : ""
+                          }`}
+                        />
+                        Autre surnom
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={editNickname}

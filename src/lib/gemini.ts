@@ -578,3 +578,267 @@ Diagnostique l'état de santé de la plante, détecte toute maladie, carence, pa
     );
   }
 }
+
+const SPECIES_NICKNAME_POOL: Array<{ keywords: string[]; names: string[] }> = [
+  {
+    keywords: ["monstera", "deliciosa", "adansonii"],
+    names: [
+      "Monty",
+      "Monstera Lisa",
+      "Madame Fenêtre",
+      "Gruyère Vert",
+      "Goliath",
+      "Jungle Queen",
+      "Chewbacca",
+      "Monsieur Gruyère",
+    ],
+  },
+  {
+    keywords: ["alocasia", "zebrina", "macrorrhiza", "polly"],
+    names: [
+      "Zébrounette",
+      "Ziggy",
+      "Dumbo",
+      "Zébulon",
+      "Cléopâtre",
+      "Oreilles d'Éléphant",
+      "Tigré",
+      "Bambou Zébré",
+    ],
+  },
+  {
+    keywords: ["dracaena", "marginata", "fragrans", "dragon"],
+    names: [
+      "Draco",
+      "Spyro",
+      "Mushu",
+      "Smaug",
+      "Toupet Vert",
+      "Don Diego",
+      "Palmito",
+      "Rasta Rocket",
+    ],
+  },
+  {
+    keywords: ["musa", "bananier", "strelitzia", "oiseau"],
+    names: [
+      "Chiquita",
+      "Bananarama",
+      "Donkey Kong",
+      "Rio",
+      "Tropicana",
+      "Copa Cabana",
+      "Bahia",
+      "King Louie",
+    ],
+  },
+  {
+    keywords: ["ficus", "lyrata", "elastica", "benjamina", "figuier"],
+    names: [
+      "Figaro",
+      "Monsieur Lyre",
+      "Fifi",
+      "Gaston",
+      "Archibald",
+      "Hercule",
+      "César",
+      "Pavarotti",
+    ],
+  },
+  {
+    keywords: ["calathea", "goeppertia", "maranta", "orbifolia"],
+    names: [
+      "Calypso",
+      "Diva",
+      "Paon Vert",
+      "Esmeralda",
+      "Prière du Soir",
+      "Frida",
+      "Carmen",
+      "Marquise",
+    ],
+  },
+  {
+    keywords: ["pothos", "epipremnum", "scindapsus", "philodendron"],
+    names: [
+      "Raiponce",
+      "Tarzan",
+      "Cascada",
+      "Philo",
+      "Indiana",
+      "Liane Folle",
+      "Robin des Bois",
+      "Houdini",
+    ],
+  },
+  {
+    keywords: ["cactus", "succulente", "echeveria", "aloe", "haworthia", "crassula", "jade"],
+    names: [
+      "Poupoune Piquante",
+      "Cactus Jack",
+      "el Gringo",
+      "Capitaine Piquant",
+      "Rambo",
+      "Hérisson",
+      "Mojave",
+      "Tequila",
+    ],
+  },
+  {
+    keywords: ["sansevieria", "dracaena trifasciata", "langue", "zamioculcas", "zz"],
+    names: [
+      "Indestructible",
+      "Excalibur",
+      "Zorro",
+      "Terminator",
+      "Sabre Laser",
+      "Zen",
+      "Highlander",
+    ],
+  },
+  {
+    keywords: ["pilea", "peperomioides", "monnaie"],
+    names: [
+      "Pépite",
+      "Pancake",
+      "Soucoupe Volante",
+      "Picsou",
+      "Marty",
+      "Gali",
+      "Spoutnik",
+    ],
+  },
+];
+
+const GENERAL_PLANT_NICKNAMES = [
+  "Chlorophylle",
+  "Pistache",
+  "Basilic Instinct",
+  "Jean-Plante",
+  "Feuillu",
+  "Pousse-Pousse",
+  "Groot",
+  "Bébé Groot",
+  "ivy",
+  "Bambou",
+  "Kiwi",
+  "Matcha",
+  "Pesto",
+  "Mojito",
+  "Sherwood",
+  "Jumanji",
+  "Totoro",
+  "Yoda",
+  "Émeraude",
+  "Gaïa",
+  " Botanix",
+  "Pépin",
+  "Olivette",
+  "Ciboulette",
+];
+
+export async function generatePlantNicknames(options: {
+  species?: string;
+  scientificName?: string;
+  location?: string;
+  exclude?: string[];
+}): Promise<{ nickname: string; suggestions: string[] }> {
+  const {
+    species = "",
+    scientificName = "",
+    location = "",
+    exclude = [],
+  } = options;
+  const excludeLower = new Set(
+    exclude.map((n) => n.trim().toLowerCase()).filter(Boolean)
+  );
+
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (apiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: DEFAULT_GEMINI_MODEL,
+        contents: `Tu es un assistant créatif pour amoureux des plantes. Génère 4 surnoms originaux, drôles ou affectueux en français pour une plante d'intérieur${
+          species ? ` de type "${species}"` : ""
+        }${scientificName ? ` (${scientificName})` : ""}${
+          location ? ` placée dans "${location}"` : ""
+        }.${
+          exclude.length > 0
+            ? ` N'utilise AUCUN de ces surnoms déjà proposés : ${exclude.join(
+                ", "
+              )}.`
+            : ""
+        }`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              suggestions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+            },
+            required: ["suggestions"],
+          },
+        },
+      });
+      const parsed = JSON.parse(response.text || "{}") as {
+        suggestions?: string[];
+      };
+      const clean = (parsed.suggestions || [])
+        .map((s) => s.trim())
+        .filter((s) => s && !excludeLower.has(s.toLowerCase()));
+      if (clean.length > 0) {
+        return {
+          nickname: clean[0],
+          suggestions: clean.slice(0, 4),
+        };
+      }
+    } catch {
+      // Fallback to local pool below
+    }
+  }
+
+  const combinedText = `${species} ${scientificName}`.toLowerCase();
+  const candidates: string[] = [];
+
+  for (const group of SPECIES_NICKNAME_POOL) {
+    if (group.keywords.some((kw) => combinedText.includes(kw))) {
+      candidates.push(...group.names);
+    }
+  }
+
+  // Shuffle general pool and append
+  const shuffledGeneral = [...GENERAL_PLANT_NICKNAMES].sort(
+    () => Math.random() - 0.5
+  );
+  candidates.push(...shuffledGeneral);
+
+  const filtered = candidates
+    .map((c) => c.trim())
+    .filter((c, idx, arr) => {
+      const lower = c.toLowerCase();
+      return (
+        !excludeLower.has(lower) &&
+        arr.findIndex((x) => x.trim().toLowerCase() === lower) === idx
+      );
+    });
+
+  // Shuffle top candidates slightly so every click feels fresh
+  const pool =
+    filtered.length >= 4
+      ? [
+          ...filtered.slice(0, 6).sort(() => Math.random() - 0.5),
+          ...filtered.slice(6),
+        ]
+      : GENERAL_PLANT_NICKNAMES;
+
+  const picked = pool.slice(0, 4);
+  return {
+    nickname: picked[0] || "Groot",
+    suggestions: picked,
+  };
+}
+

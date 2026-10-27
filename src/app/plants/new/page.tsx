@@ -13,6 +13,7 @@ import {
   Loader2,
   CloudRain,
   FileText,
+  RefreshCw,
 } from "lucide-react";
 import { ImagePicker } from "@/components/ImagePicker";
 
@@ -42,6 +43,9 @@ export default function NewPlantPage() {
   const [careNotes, setCareNotes] = useState("");
 
   const [identifying, setIdentifying] = useState(false);
+  const [generatingNickname, setGeneratingNickname] = useState(false);
+  const [nicknameSuggestions, setNicknameSuggestions] = useState<string[]>([]);
+  const [seenNicknames, setSeenNicknames] = useState<string[]>([]);
   const [aiBadge, setAiBadge] = useState<{
     confidence: number;
     isDemo?: boolean;
@@ -76,8 +80,11 @@ export default function NewPlantPage() {
       const id = data.identification;
       setSpecies(id.species || "");
       setScientificName(id.scientificName || "");
-      if (!nickname.trim() && id.suggestedNickname) {
+      if (id.suggestedNickname) {
         setNickname(id.suggestedNickname);
+        setSeenNicknames((prev) =>
+          Array.from(new Set([...prev, id.suggestedNickname]))
+        );
       }
       if (id.wateringIntervalDays) {
         setWateringIntervalDays(id.wateringIntervalDays);
@@ -100,6 +107,38 @@ export default function NewPlantPage() {
       setError("Erreur réseau lors de l'appel à l'IA.");
     } finally {
       setIdentifying(false);
+    }
+  };
+
+  const handleGenerateNickname = async () => {
+    setGeneratingNickname(true);
+    try {
+      const excludeList = Array.from(
+        new Set([...seenNicknames, nickname].filter(Boolean))
+      );
+      const res = await fetch("/api/ai/nickname", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          species,
+          scientificName,
+          location,
+          exclude: excludeList,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.nickname) {
+        setNickname(data.nickname);
+        const suggestions: string[] = Array.isArray(data.suggestions)
+          ? data.suggestions
+          : [data.nickname];
+        setNicknameSuggestions(suggestions);
+        setSeenNicknames((prev) =>
+          Array.from(new Set([...prev, data.nickname, ...suggestions]))
+        );
+      }
+    } finally {
+      setGeneratingNickname(false);
     }
   };
 
@@ -225,9 +264,25 @@ export default function NewPlantPage() {
           {/* Step 2: Identity */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-stone-800">
-                Surnom de la plante *
-              </label>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-sm font-semibold text-stone-800">
+                  Surnom de la plante *
+                </label>
+                <button
+                  type="button"
+                  onClick={handleGenerateNickname}
+                  disabled={generatingNickname}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-botanical-50 border border-botanical-200 px-2.5 py-1 text-xs font-semibold text-botanical-800 hover:bg-botanical-100 disabled:opacity-50 transition-colors"
+                  title="Générer un autre surnom original"
+                >
+                  <RefreshCw
+                    className={`h-3 w-3 text-botanical-700 ${
+                      generatingNickname ? "animate-spin" : ""
+                    }`}
+                  />
+                  Autre surnom
+                </button>
+              </div>
               <input
                 type="text"
                 required
@@ -236,6 +291,25 @@ export default function NewPlantPage() {
                 placeholder="Ex: Monty du Salon"
                 className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-sm focus:border-botanical-600 focus:bg-white focus:outline-none"
               />
+              {nicknameSuggestions.length > 1 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-stone-500">Idées :</span>
+                  {nicknameSuggestions.map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => setNickname(sug)}
+                      className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                        nickname === sug
+                          ? "bg-botanical-700 text-white"
+                          : "bg-stone-100 text-stone-700 hover:bg-botanical-100 hover:text-botanical-900"
+                      }`}
+                    >
+                      {sug}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
