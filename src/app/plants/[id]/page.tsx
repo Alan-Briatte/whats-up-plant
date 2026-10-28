@@ -111,6 +111,16 @@ export default function PlantDetailPage() {
   const [editCareNotes, setEditCareNotes] = useState("");
   const [generatingNickname, setGeneratingNickname] = useState(false);
   const [seenNicknames, setSeenNicknames] = useState<string[]>([]);
+  const [roomSuggestions, setRoomSuggestions] = useState<string[]>([
+    "Salon",
+    "Chambre",
+    "Cuisine",
+    "Bureau",
+    "Salle de bain",
+    "Entrée",
+    "Véranda / Balcon",
+  ]);
+  const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
 
   // Carnet de Santé photo management
   const addPhotoInputRef = useRef<HTMLInputElement | null>(null);
@@ -147,6 +157,19 @@ export default function PlantDetailPage() {
 
   useEffect(() => {
     fetchPlant();
+    fetch("/api/plants")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.plants)) {
+          const existingRooms = data.plants
+            .map((p: { location?: string }) => (p.location || "").trim())
+            .filter(Boolean);
+          setRoomSuggestions((prev) =>
+            Array.from(new Set([...prev, ...existingRooms]))
+          );
+        }
+      })
+      .catch(() => {});
   }, [fetchPlant]);
 
   const handleWater = async (e: React.FormEvent) => {
@@ -183,6 +206,11 @@ export default function PlantDetailPage() {
       }),
     });
     if (res.ok) {
+      if (editLocation.trim()) {
+        setRoomSuggestions((prev) =>
+          Array.from(new Set([...prev, editLocation.trim()]))
+        );
+      }
       setEditing(false);
       await fetchPlant();
     }
@@ -538,16 +566,94 @@ export default function PlantDetailPage() {
                       className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
                     />
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      Emplacement
+                      Pièce / Emplacement
                     </label>
-                    <input
-                      type="text"
-                      value={editLocation}
-                      onChange={(e) => setEditLocation(e.target.value)}
-                      className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editLocation}
+                        onFocus={() => setLocationDropdownOpen(true)}
+                        onBlur={() =>
+                          setTimeout(() => setLocationDropdownOpen(false), 180)
+                        }
+                        onChange={(e) => {
+                          setEditLocation(e.target.value);
+                          setLocationDropdownOpen(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setLocationDropdownOpen(false);
+                          }
+                        }}
+                        placeholder="Ex: Salon, Chambre, Terrasse..."
+                        className="w-full rounded-xl border border-stone-200 px-3 py-2 pr-8 text-sm focus:border-botanical-600 focus:outline-none"
+                      />
+                      <MapPin className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-stone-400" />
+                    </div>
+
+                    {locationDropdownOpen && (
+                      <div className="absolute z-30 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                        {roomSuggestions
+                          .filter((r) =>
+                            !editLocation.trim() ||
+                            r.toLowerCase() === editLocation.trim().toLowerCase()
+                              ? true
+                              : r
+                                  .toLowerCase()
+                                  .includes(editLocation.trim().toLowerCase())
+                          )
+                          .map((room) => {
+                            const isSelected =
+                              room.toLowerCase() ===
+                              editLocation.trim().toLowerCase();
+                            return (
+                              <button
+                                key={room}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setEditLocation(room);
+                                  setLocationDropdownOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs transition-colors ${
+                                  isSelected
+                                    ? "bg-botanical-50 font-semibold text-botanical-800"
+                                    : "text-stone-700 hover:bg-stone-50"
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <MapPin className="h-3.5 w-3.5 text-botanical-600" />
+                                  {room}
+                                </span>
+                                {isSelected && (
+                                  <Check className="h-3.5 w-3.5 text-botanical-700" />
+                                )}
+                              </button>
+                            );
+                          })}
+
+                        {editLocation.trim() &&
+                          !roomSuggestions.some(
+                            (r) =>
+                              r.toLowerCase() ===
+                              editLocation.trim().toLowerCase()
+                          ) && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setEditLocation(editLocation.trim());
+                                setLocationDropdownOpen(false);
+                              }}
+                              className="flex w-full items-center gap-1.5 border-t border-stone-100 px-3 py-2 text-left text-xs font-semibold text-botanical-700 hover:bg-botanical-50"
+                            >
+                              + Utiliser « {editLocation.trim()} »
+                            </button>
+                          )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-stone-700 mb-1">
