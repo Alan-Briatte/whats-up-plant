@@ -579,7 +579,7 @@ export function DashboardClient({
       )}
 
       {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-botanical-800 via-botanical-700 to-emerald-800 p-6 sm:p-8 text-white shadow-md">
+      <div className="relative overflow-hidden rounded-3xl border border-transparent dark:border-botanical-800 bg-gradient-to-br from-botanical-800 via-botanical-700 to-emerald-800 p-6 sm:p-8 text-white shadow-md">
         <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-botanical-200">
@@ -602,7 +602,7 @@ export function DashboardClient({
           <div className="flex flex-wrap gap-3">
             <Link
               href="/plants/new"
-              className="flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-botanical-900 shadow-sm hover:bg-botanical-50 transition-colors"
+              className="flex items-center gap-2 rounded-2xl border border-transparent dark:border-botanical-500/50 bg-white px-4 py-2.5 text-sm font-semibold text-botanical-900 shadow-sm hover:bg-botanical-50 transition-colors"
             >
               <Plus className="h-4 w-4 text-botanical-700" />
               Ajouter une plante

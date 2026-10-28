@@ -5,13 +5,244 @@
 :root {
   --foreground-rgb: 24, 43, 33;
   --background-rgb: 245, 250, 247;
+  color-scheme: light;
 }
 
+html.dark {
+  --foreground-rgb: 232, 242, 236;
+  --background-rgb: 11, 20, 15;
+  color-scheme: dark;
+}
+
+html,
 body {
   color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+  background-color: rgb(var(--background-rgb));
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Global Botanical Dark Mode overrides */
+html.dark,
+html.dark body,
+html.dark .bg-\[\#f5faf7\] {
+  background-color: #0b140f !important;
+  color: #e8f2ec !important;
+}
+
+/* Surfaces & Cards */
+html.dark .bg-white {
+  background-color: #132119 !important;
+}
+html.dark .bg-white\/85,
+html.dark .bg-white\/95 {
+  background-color: rgba(16, 29, 22, 0.92) !important;
+}
+html.dark .bg-stone-50,
+html.dark .bg-stone-50\/70 {
+  background-color: #182920 !important;
+}
+html.dark .bg-stone-100 {
+  background-color: #1f3529 !important;
+}
+html.dark .bg-stone-200 {
+  background-color: #294435 !important;
+}
+
+/* Hero Banners in Dark Mode */
+html.dark .from-botanical-800 {
+  --tw-gradient-from: #13281d var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(19, 40, 29, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+html.dark .via-botanical-700 {
+  --tw-gradient-stops: var(--tw-gradient-from), #183526 var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+}
+html.dark .to-emerald-800,
+html.dark .to-teal-800 {
+  --tw-gradient-to: #0f2920 var(--tw-gradient-to-position) !important;
+}
+
+/* Botanical & Colored Tinted Surfaces */
+html.dark .bg-botanical-50,
+html.dark .bg-botanical-50\/40,
+html.dark .bg-botanical-50\/50,
+html.dark .bg-botanical-50\/60,
+html.dark .bg-botanical-50\/70,
+html.dark .bg-botanical-50\/80,
+html.dark .bg-botanical-50\/90 {
+  background-color: #182c21 !important;
+}
+html.dark .bg-botanical-100,
+html.dark .bg-botanical-100\/80 {
+  background-color: #1f3a2b !important;
+}
+html.dark .bg-sky-50,
+html.dark .bg-sky-50\/70,
+html.dark .bg-sky-50\/80 {
+  background-color: #112631 !important;
+}
+html.dark .bg-sky-100 {
+  background-color: #163242 !important;
+}
+html.dark .from-sky-50 {
+  --tw-gradient-from: #112530 var(--tw-gradient-from-position) !important;
+  --tw-gradient-via: #132119 !important;
+  --tw-gradient-to: #112530 var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: #112530, #132119, #112530 !important;
+}
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/40,
+html.dark .bg-amber-50\/80,
+html.dark .bg-amber-50\/90 {
+  background-color: #292012 !important;
+}
+html.dark .bg-amber-100,
+html.dark .bg-amber-100\/95 {
+  background-color: rgba(120, 53, 15, 0.85) !important;
+}
+html.dark .bg-teal-50\/80 {
+  background-color: #122927 !important;
+}
+html.dark .bg-emerald-50\/50 {
+  background-color: #132a20 !important;
+}
+html.dark .bg-emerald-100,
+html.dark .bg-emerald-100\/95 {
+  background-color: rgba(6, 78, 59, 0.85) !important;
+}
+html.dark .bg-red-50 {
+  background-color: #2c1618 !important;
+}
+html.dark .bg-red-100,
+html.dark .bg-red-100\/95 {
+  background-color: rgba(127, 29, 29, 0.85) !important;
+}
+
+/* Hover States in Dark Mode */
+html.dark .hover\:bg-botanical-50:hover,
+html.dark .hover\:bg-botanical-100:hover,
+html.dark .hover\:bg-botanical-100\/70:hover {
+  background-color: #234231 !important;
+}
+html.dark .hover\:bg-stone-50:hover,
+html.dark .hover\:bg-stone-200\/60:hover {
+  background-color: #21382b !important;
+}
+html.dark .hover\:bg-sky-100:hover {
+  background-color: #1a3a4c !important;
+}
+html.dark .hover\:bg-red-50:hover,
+html.dark .hover\:bg-red-100:hover {
+  background-color: #3b1c1f !important;
+}
+html.dark .hover\:bg-amber-100:hover {
+  background-color: #382b16 !important;
+}
+
+/* Borders */
+html.dark .border-stone-100 {
+  border-color: #1f3328 !important;
+}
+html.dark .border-stone-200,
+html.dark .border-stone-200\/80,
+html.dark .border-stone-200\/90 {
+  border-color: #263f31 !important;
+}
+html.dark .border-botanical-200,
+html.dark .border-botanical-200\/60,
+html.dark .border-botanical-200\/70,
+html.dark .border-botanical-200\/80,
+html.dark .border-botanical-300 {
+  border-color: #2d533e !important;
+}
+html.dark .border-sky-100,
+html.dark .border-sky-200,
+html.dark .border-sky-200\/80 {
+  border-color: rgba(56, 189, 248, 0.28) !important;
+}
+html.dark .border-amber-100,
+html.dark .border-amber-200,
+html.dark .border-amber-200\/60,
+html.dark .border-amber-200\/80 {
+  border-color: rgba(251, 191, 36, 0.28) !important;
+}
+html.dark .border-teal-100 {
+  border-color: rgba(45, 212, 191, 0.28) !important;
+}
+html.dark .border-emerald-200\/80 {
+  border-color: rgba(52, 211, 153, 0.28) !important;
+}
+html.dark .border-red-200 {
+  border-color: rgba(248, 113, 113, 0.35) !important;
+}
+
+/* Text colors */
+html.dark .text-stone-900 {
+  color: #f0f7f3 !important;
+}
+html.dark .text-stone-800 {
+  color: #dcebe2 !important;
+}
+html.dark .text-stone-700 {
+  color: #c2d8cb !important;
+}
+html.dark .text-stone-600 {
+  color: #9cb7a8 !important;
+}
+html.dark .text-stone-500 {
+  color: #7c9989 !important;
+}
+html.dark .text-botanical-900 {
+  color: #d8f0e1 !important;
+}
+html.dark .text-botanical-800 {
+  color: #a6d6b8 !important;
+}
+html.dark .text-botanical-700 {
+  color: #6bc08e !important;
+}
+html.dark .text-sky-800,
+html.dark .text-sky-700 {
+  color: #7dd3fc !important;
+}
+html.dark .text-amber-900,
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+html.dark .text-teal-800 {
+  color: #5eead4 !important;
+}
+html.dark .text-emerald-950,
+html.dark .text-emerald-900,
+html.dark .text-emerald-800,
+html.dark .text-emerald-700 {
+  color: #a7f3d0 !important;
+}
+html.dark .text-red-700,
+html.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+
+/* Form inputs in dark mode */
+html.dark input:not([type="checkbox"]),
+html.dark select,
+html.dark textarea {
+  background-color: #182a20 !important;
+  border-color: #2b4738 !important;
+  color: #eef6f1 !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #6d8a7a !important;
+}
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #458b64 !important;
+  background-color: #1c3125 !important;
 }
 
 @layer utilities {

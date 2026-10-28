@@ -26,6 +26,21 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
+const THEME_INIT_SCRIPT = `
+(function() {
+  try {
+    var saved = localStorage.getItem('whatsupplant_theme');
+    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var isDark = saved === 'dark' || (!saved && prefersDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch (e) {}
+})();
+`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -34,8 +49,11 @@ export default async function RootLayout({
   const user = await getSessionUser();
 
   return (
-    <html lang="fr">
-      <body className="min-h-screen bg-[#f5faf7] text-stone-900 antialiased pb-20 md:pb-10">
+    <html lang="fr" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="min-h-screen antialiased pb-20 md:pb-10">
         <Navbar user={user} />
         <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
       </body>

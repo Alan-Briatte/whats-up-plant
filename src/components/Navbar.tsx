@@ -12,6 +12,8 @@ import {
   Bell,
   Download,
   User as UserIcon,
+  Moon,
+  Sun,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -34,8 +36,11 @@ export function Navbar({ user }: NavbarProps) {
     useState<BeforeInstallPromptEvent | null>(null);
   const [notifPermission, setNotifPermission] =
     useState<NotificationPermission>("default");
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
@@ -54,6 +59,18 @@ export function Navbar({ user }: NavbarProps) {
         handleBeforeInstallPrompt
       );
   }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("whatsupplant_theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("whatsupplant_theme", "light");
+    }
+  };
 
   const handleInstallPwa = async () => {
     if (!deferredPrompt) return;
@@ -83,7 +100,24 @@ export function Navbar({ user }: NavbarProps) {
     router.refresh();
   };
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="fixed right-4 top-4 z-40">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 shadow-sm hover:bg-stone-50 transition-colors"
+          title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
+        >
+          {isDark ? (
+            <Sun className="h-4 w-4 text-amber-400" />
+          ) : (
+            <Moon className="h-4 w-4 text-botanical-800" />
+          )}
+        </button>
+      </div>
+    );
+  }
 
   const navItems = [
     {
@@ -169,6 +203,19 @@ export function Navbar({ user }: NavbarProps) {
                 <span className="hidden sm:inline">Activer rappels</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors"
+              title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
+            >
+              {isDark ? (
+                <Sun className="h-4 w-4 text-amber-400" />
+              ) : (
+                <Moon className="h-4 w-4 text-botanical-800" />
+              )}
+            </button>
 
             <div className="hidden sm:flex items-center gap-1.5 rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700">
               <UserIcon className="h-3.5 w-3.5 text-botanical-700" />
