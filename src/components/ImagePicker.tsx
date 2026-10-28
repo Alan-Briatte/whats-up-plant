@@ -32,10 +32,10 @@ export function ImagePicker({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [compressing, setCompressing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
     setCompressing(true);
 
     const reader = new FileReader();
@@ -80,6 +80,37 @@ export function ImagePicker({
     reader.readAsDataURL(file);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const droppedFiles = Array.from(e.dataTransfer.files || []);
+    const imageFile = droppedFiles.find((f) => f.type.startsWith("image/"));
+    if (imageFile) {
+      processFile(imageFile);
+    }
+  };
+
   const selectSampleUrlAsDataUrl = async (url: string) => {
     setCompressing(true);
     try {
@@ -108,13 +139,27 @@ export function ImagePicker({
       </label>
 
       {value ? (
-        <div className="relative overflow-hidden rounded-2xl border-2 border-botanical-200 bg-stone-100 aspect-[16/10] max-h-72">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`relative overflow-hidden rounded-2xl border-2 bg-stone-100 aspect-[16/10] max-h-72 transition-all ${
+            isDragging
+              ? "border-botanical-600 ring-4 ring-botanical-200"
+              : "border-botanical-200"
+          }`}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}
             alt="Aperçu plante"
             className="h-full w-full object-cover"
           />
+          {isDragging && (
+            <div className="absolute inset-0 flex items-center justify-center bg-botanical-900/65 text-sm font-bold text-white backdrop-blur-sm">
+              Relâchez pour remplacer la photo 🌿
+            </div>
+          )}
           <button
             type="button"
             onClick={() => onChange("")}
@@ -125,12 +170,23 @@ export function ImagePicker({
           </button>
         </div>
       ) : (
-        <div className="rounded-2xl border-2 border-dashed border-botanical-300 bg-botanical-50/60 p-6 text-center transition-colors hover:border-botanical-500">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`rounded-2xl border-2 border-dashed p-6 text-center transition-all ${
+            isDragging
+              ? "border-botanical-600 bg-botanical-100/80 ring-4 ring-botanical-200/60 scale-[1.01]"
+              : "border-botanical-300 bg-botanical-50/60 hover:border-botanical-500"
+          }`}
+        >
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-botanical-100 text-botanical-700">
             <ImageIcon className="h-6 w-6" />
           </div>
           <p className="text-sm font-medium text-stone-700">
-            Prenez une photo avec votre mobile ou importez une image
+            {isDragging
+              ? "Relâchez votre photo ici 🌿"
+              : "Glissez-déposez une photo ici, prenez-la avec votre mobile ou importez un fichier"}
           </p>
           <p className="mt-1 text-xs text-stone-500">
             JPG, PNG ou WebP • Compression automatique rapide

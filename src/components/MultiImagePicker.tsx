@@ -61,17 +61,16 @@ export function MultiImagePicker({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [compressing, setCompressing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFilesSelected = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
+  const processFiles = async (files: File[]) => {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
 
     setCompressing(true);
     try {
       const remainingSlots = Math.max(0, maxImages - values.length);
-      const filesToProcess = Array.from(fileList).slice(0, remainingSlots);
+      const filesToProcess = imageFiles.slice(0, remainingSlots);
       const compressedList: string[] = [];
 
       for (const file of filesToProcess) {
@@ -84,8 +83,38 @@ export function MultiImagePicker({
       }
     } finally {
       setCompressing(false);
-      e.target.value = "";
     }
+  };
+
+  const handleFilesSelected = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    await processFiles(Array.from(fileList));
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (values.length >= maxImages) return;
+    const droppedFiles = Array.from(e.dataTransfer.files || []);
+    await processFiles(droppedFiles);
   };
 
   const handleRemove = (index: number) => {
@@ -104,7 +133,14 @@ export function MultiImagePicker({
       </div>
 
       {values.length > 0 ? (
-        <div className="space-y-3">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`space-y-3 rounded-2xl transition-all ${
+            isDragging ? "ring-4 ring-botanical-200 p-2 bg-botanical-50/50" : ""
+          }`}
+        >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {values.map((imgSrc, idx) => (
               <div
@@ -132,9 +168,17 @@ export function MultiImagePicker({
             ))}
 
             {values.length < maxImages && (
-              <div className="flex flex-col items-center justify-center gap-2 aspect-[4/3] rounded-2xl border-2 border-dashed border-botanical-300 bg-botanical-50/50 p-3 text-center">
+              <div
+                className={`flex flex-col items-center justify-center gap-2 aspect-[4/3] rounded-2xl border-2 border-dashed p-3 text-center transition-colors ${
+                  isDragging
+                    ? "border-botanical-600 bg-botanical-100/80"
+                    : "border-botanical-300 bg-botanical-50/50"
+                }`}
+              >
                 <p className="text-xs font-semibold text-botanical-900">
-                  Ajouter un autre angle
+                  {isDragging
+                    ? "Relâchez pour ajouter 🌿"
+                    : "Glisser-déposer ou ajouter"}
                 </p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   <button
@@ -161,12 +205,23 @@ export function MultiImagePicker({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border-2 border-dashed border-botanical-300 bg-botanical-50/60 p-6 text-center transition-colors hover:border-botanical-500">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`rounded-2xl border-2 border-dashed p-6 text-center transition-all ${
+            isDragging
+              ? "border-botanical-600 bg-botanical-100/80 ring-4 ring-botanical-200/60 scale-[1.01]"
+              : "border-botanical-300 bg-botanical-50/60 hover:border-botanical-500"
+          }`}
+        >
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-botanical-100 text-botanical-700">
             <ImageIcon className="h-6 w-6" />
           </div>
           <p className="text-sm font-medium text-stone-700">
-            Ajoutez une ou plusieurs photos pour illustrer le problème
+            {isDragging
+              ? "Relâchez vos photos ici 🌿"
+              : "Glissez-déposez vos photos ici ou cliquez pour les sélectionner"}
           </p>
           <p className="mt-1 text-xs text-stone-500">
             Vue d&apos;ensemble, zoom sur une feuille malade, revers de feuille
