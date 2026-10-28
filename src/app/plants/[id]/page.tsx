@@ -100,6 +100,7 @@ export default function PlantDetailPage() {
   const [plant, setPlant] = useState<PlantDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [watering, setWatering] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
   const [waterNote, setWaterNote] = useState("");
   const [editing, setEditing] = useState(false);
   const [exportingPlant, setExportingPlant] = useState(false);
@@ -190,6 +191,24 @@ export default function PlantDetailPage() {
       }
     } finally {
       setWatering(false);
+    }
+  };
+
+  const handleDeleteWateringLog = async (logId: string) => {
+    if (!plant) return;
+    setDeletingLogId(logId);
+    try {
+      const res = await fetch(
+        `/api/plants/${plant.id}/water?logId=${encodeURIComponent(logId)}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (res.ok) {
+        await fetchPlant();
+      }
+    } finally {
+      setDeletingLogId(null);
     }
   };
 
@@ -854,19 +873,34 @@ export default function PlantDetailPage() {
               {plant.wateringLogs.map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between rounded-xl border border-stone-100 bg-stone-50 px-3.5 py-2.5 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-stone-100 bg-stone-50 px-3.5 py-2.5 text-xs"
                 >
-                  <span className="font-medium text-stone-800">
+                  <span className="font-medium text-stone-800 truncate">
                     {log.notes || "Arrosage régulier"}
                   </span>
-                  <span className="flex items-center gap-1 text-stone-500">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(log.wateredAt).toLocaleDateString("fr-FR", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="flex items-center gap-1 text-stone-500">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(log.wateredAt).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={deletingLogId === log.id}
+                      onClick={() => handleDeleteWateringLog(log.id)}
+                      className="flex h-6 w-6 items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
+                      title="Supprimer cet arrosage (recalcule la prochaine échéance)"
+                    >
+                      {deletingLogId === log.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

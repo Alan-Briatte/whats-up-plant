@@ -59,6 +59,10 @@ export function DashboardClient({
   const [waterSuccessToast, setWaterSuccessToast] = useState<string | null>(
     null
   );
+  const [undoWaterInfo, setUndoWaterInfo] = useState<{
+    plantId: string;
+    logId?: string;
+  } | null>(null);
 
   // Export / Import state
   const [backupModalOpen, setBackupModalOpen] = useState(false);
@@ -127,12 +131,47 @@ export function DashboardClient({
               : p
           )
         );
+        setUndoWaterInfo({ plantId: plant.id, logId: data.log?.id });
         setWaterSuccessToast(`${plant.nickname} a bien été arrosée ! 💧`);
-        setTimeout(() => setWaterSuccessToast(null), 3500);
+        setTimeout(() => {
+          setWaterSuccessToast(null);
+          setUndoWaterInfo(null);
+        }, 6000);
         router.refresh();
       }
     } finally {
       setWateringId(null);
+    }
+  };
+
+  const handleUndoQuickWater = async () => {
+    if (!undoWaterInfo) return;
+    const { plantId, logId } = undoWaterInfo;
+    setUndoWaterInfo(null);
+    try {
+      const url = logId
+        ? `/api/plants/${plantId}/water?logId=${encodeURIComponent(logId)}`
+        : `/api/plants/${plantId}/water`;
+      const res = await fetch(url, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok && data.plant) {
+        setPlants((prev) =>
+          prev.map((p) =>
+            p.id === plantId
+              ? {
+                  ...p,
+                  lastWateredAt: data.plant.lastWateredAt,
+                  nextWateringAt: data.plant.nextWateringAt,
+                }
+              : p
+          )
+        );
+        setWaterSuccessToast("Arrosage annulé ↩️");
+        setTimeout(() => setWaterSuccessToast(null), 3000);
+        router.refresh();
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -572,9 +611,18 @@ export function DashboardClient({
 
       {/* Toast feedback */}
       {waterSuccessToast && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-2 rounded-2xl bg-botanical-800 px-4 py-3 text-sm font-medium text-white shadow-lg">
+        <div className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-3 rounded-2xl bg-botanical-800 px-4 py-3 text-sm font-medium text-white shadow-lg">
           <Droplets className="h-4 w-4 text-sky-300" />
-          {waterSuccessToast}
+          <span>{waterSuccessToast}</span>
+          {undoWaterInfo && (
+            <button
+              type="button"
+              onClick={handleUndoQuickWater}
+              className="ml-1 rounded-lg bg-white/15 px-2.5 py-1 text-xs font-bold text-sky-200 hover:bg-white/25 transition-colors"
+            >
+              Annuler
+            </button>
+          )}
         </div>
       )}
 
