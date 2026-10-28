@@ -15,6 +15,7 @@ import {
   Bug,
   HeartPulse,
   Images,
+  Image as ImageIcon,
 } from "lucide-react";
 import { MultiImagePicker } from "@/components/MultiImagePicker";
 import { PlantDiagnosisResult } from "@/lib/gemini";
@@ -46,6 +47,7 @@ function DiagnoseContent() {
 
   const [plants, setPlants] = useState<UserPlantOption[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState(initialPlantId);
+  const [useMainPhoto, setUseMainPhoto] = useState(true);
   const [images, setImages] = useState<string[]>([]);
   const [symptoms, setSymptoms] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,6 +72,9 @@ function DiagnoseContent() {
       .catch(() => {});
   }, [initialPlantId]);
 
+  const selectedPlant = plants.find((p) => p.id === selectedPlantId) || null;
+  const hasMainPhoto = Boolean(selectedPlant?.imageUrl);
+
   const toggleSymptomChip = (chip: string) => {
     if (symptoms.includes(chip)) {
       setSymptoms(symptoms.replace(chip, "").replace(/,\s*,/g, ",").trim());
@@ -81,9 +86,20 @@ function DiagnoseContent() {
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (images.length === 0) {
+
+    const finalImages: string[] = [];
+    if (hasMainPhoto && useMainPhoto && selectedPlant?.imageUrl) {
+      finalImages.push(selectedPlant.imageUrl);
+    }
+    for (const img of images) {
+      if (img && !finalImages.includes(img)) {
+        finalImages.push(img);
+      }
+    }
+
+    if (finalImages.length === 0) {
       setError(
-        "Veuillez ajouter au moins une photo de la plante ou des feuilles touchées."
+        "Veuillez ajouter au moins une photo ou cocher l'utilisation de la photo principale de la plante."
       );
       return;
     }
@@ -95,7 +111,7 @@ function DiagnoseContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          images,
+          images: finalImages,
           symptoms,
           plantId: selectedPlantId || null,
         }),
@@ -113,6 +129,9 @@ function DiagnoseContent() {
       setLoading(false);
     }
   };
+
+  const totalPhotosToAnalyze =
+    (hasMainPhoto && useMainPhoto ? 1 : 0) + images.length;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -139,9 +158,9 @@ function DiagnoseContent() {
               Docteur Plante IA — Diagnostic & Carnet Photo 🩺
             </h1>
             <p className="mt-1 text-sm text-botanical-100">
-              Ajoutez une ou plusieurs photos (feuille touchée, tige, terreau) :
-              l&apos;IA analyse le problème et conserve toutes les photos dans
-              le carnet de santé de votre plante.
+              Analysez directement la photo principale de votre plante ou
+              ajoutez des photos supplémentaires (feuilles, tiges, terreau) pour
+              enrichir son carnet de santé.
             </p>
           </div>
         </div>
@@ -159,14 +178,17 @@ function DiagnoseContent() {
         )}
 
         {/* Link to existing plant */}
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold text-stone-800">
-            1. Plante concernée (pour archiver le diagnostic et les photos dans
-            son carnet de santé)
+        <div className="space-y-3">
+          <label className="block text-sm font-semibold text-stone-800">
+            1. Plante concernée (pour archiver le diagnostic dans son carnet de
+            santé)
           </label>
           <select
             value={selectedPlantId}
-            onChange={(e) => setSelectedPlantId(e.target.value)}
+            onChange={(e) => {
+              setSelectedPlantId(e.target.value);
+              setUseMainPhoto(true);
+            }}
             className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-sm focus:border-botanical-600 focus:bg-white focus:outline-none"
           >
             <option value="">
@@ -178,13 +200,61 @@ function DiagnoseContent() {
               </option>
             ))}
           </select>
+
+          {/* Main Photo Option when selected plant has an imageUrl */}
+          {selectedPlant && hasMainPhoto && selectedPlant.imageUrl && (
+            <div
+              onClick={() => setUseMainPhoto((prev) => !prev)}
+              className={`cursor-pointer flex items-center justify-between gap-4 rounded-2xl border p-3.5 transition-all ${
+                useMainPhoto
+                  ? "border-botanical-400 bg-botanical-50/70 shadow-sm"
+                  : "border-stone-200 bg-stone-50 opacity-75 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-botanical-200 bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={selectedPlant.imageUrl}
+                    alt={selectedPlant.nickname}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5 text-botanical-700" />
+                    <p className="text-xs font-bold text-stone-900">
+                      Utiliser la photo principale de {selectedPlant.nickname}
+                    </p>
+                  </div>
+                  <p className="mt-0.5 text-xs text-stone-600">
+                    {images.length === 0
+                      ? "Vous pouvez lancer le diagnostic directement sans ajouter d'autre photo."
+                      : "Sera analysée en complément des photos ajoutées ci-dessous."}
+                  </p>
+                </div>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={useMainPhoto}
+                onChange={(e) => setUseMainPhoto(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                className="h-5 w-5 rounded border-stone-300 text-botanical-700 focus:ring-botanical-600 cursor-pointer"
+              />
+            </div>
+          )}
         </div>
 
         {/* Multi Photo Picker */}
         <MultiImagePicker
           values={images}
           onChange={setImages}
-          label="2. Photos illustrant le problème (jusqu'à 6 photos) *"
+          label={
+            hasMainPhoto && useMainPhoto
+              ? "2. Photos supplémentaires (optionnel — jusqu'à 6 photos)"
+              : "2. Photos illustrant le problème (jusqu'à 6 photos) *"
+          }
           maxImages={6}
         />
 
@@ -229,13 +299,15 @@ function DiagnoseContent() {
           {loading ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
-              Analyse des {images.length} photo{images.length > 1 ? "s" : ""}{" "}
-              et sauvegarde...
+              Analyse de {totalPhotosToAnalyze || 1} photo
+              {totalPhotosToAnalyze > 1 ? "s" : ""} en cours...
             </>
           ) : (
             <>
               <Sparkles className="h-5 w-5" />
-              Lancer le diagnostic IA & enregistrer les photos
+              {images.length === 0 && hasMainPhoto && useMainPhoto
+                ? `Diagnostiquer avec la photo principale de ${selectedPlant?.nickname}`
+                : "Lancer le diagnostic IA & enregistrer les photos"}
             </>
           )}
         </button>

@@ -23,35 +23,46 @@ export async function POST(req: Request) {
     const symptoms = body.symptoms || "";
     const plantId = body.plantId || null;
 
-    if (rawImages.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Veuillez joindre au moins une photo de la plante ou des feuilles.",
-        },
-        { status: 400 }
-      );
-    }
-
     let plantSpecies: string | undefined;
+    let targetPlantMainPhoto: string | null = null;
+
     if (plantId) {
       const targetPlant = await prisma.plant.findFirst({
         where: { id: plantId, userId: user.id },
       });
       if (targetPlant) {
         plantSpecies = `${targetPlant.species} (${targetPlant.nickname})`;
+        targetPlantMainPhoto = targetPlant.imageUrl;
       }
     }
 
-    // 1. Analyze all photos with Gemini Vision
+    // Si aucune photo supplémentaire n'est fournie, utiliser la photo principale de la plante
+    const imagesToAnalyze =
+      rawImages.length > 0
+        ? rawImages
+        : targetPlantMainPhoto
+        ? [targetPlantMainPhoto]
+        : [];
+
+    if (imagesToAnalyze.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Veuillez joindre au moins une photo ou sélectionner une plante possédant déjà une photo principale.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 1. Analyze photos with Gemini Vision
     const diagnosis = await diagnosePlantHealth(
-      rawImages,
+      imagesToAnalyze,
       symptoms,
       plantSpecies
     );
 
     // 2. Normalize photos for storage in the plant's Carnet de Santé
-    const storedPhotoUrls = await persistDiagnosisPhotos(rawImages);
+    const storedPhotoUrls = await persistDiagnosisPhotos(imagesToAnalyze);
     const imagesJsonStr = JSON.stringify(storedPhotoUrls);
 
     const saved = await prisma.healthDiagnosis.create({
