@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,8 +16,15 @@ import {
   Search,
   BellRing,
   ChevronRight,
+  Download,
+  Upload,
+  FileJson,
+  X,
+  Loader2,
+  ArrowDownUp,
 } from "lucide-react";
 import { getWateringUrgency } from "@/lib/utils";
+import type { BackupPlant } from "@/app/api/plants/backup/route";
 
 export interface PlantItem {
   id: string;
@@ -52,6 +59,22 @@ export function DashboardClient({
   const [waterSuccessToast, setWaterSuccessToast] = useState<string | null>(
     null
   );
+
+  // Export / Import state
+  const [backupModalOpen, setBackupModalOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<"merge" | "append" | "replace">(
+    "merge"
+  );
+  const [importPreview, setImportPreview] = useState<{
+    fileName: string;
+    plants: BackupPlant[];
+    totalLogs: number;
+    totalDiagnoses: number;
+  } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const duePlants = plants.filter((p) => {
     const u = getWateringUrgency(p.nextWateringAt);
@@ -113,6 +136,141 @@ export function DashboardClient({
     }
   };
 
+  const handleExportAll = async () => {
+    setExporting(true);
+    setImportError(null);
+    try {
+      const res = await fetch("/api/plants/backup");
+      if (!res.ok) {
+        throw new Error("Impossible de récupérer les plantes à exporter.");
+      }
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `whatsupplant-export-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setWaterSuccessToast(
+        `${data.plants?.length || 0} plante(s) exportée(s) avec succès ! 📦`
+      );
+      setTimeout(() => setWaterSuccessToast(null), 4000);
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : "Erreur lors de l'export."
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSelectImportFile = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const rawList: BackupPlant[] = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.plants)
+        ? parsed.plants
+        : [];
+
+      const validPlants = rawList.filter(
+        (p) =>
+          p &&
+          typeof p === "object" &&
+          typeof p.nickname === "string" &&
+          p.nickname.trim() &&
+          typeof p.species === "string" &&
+          p.species.trim()
+      );
+
+      if (validPlants.length === 0) {
+        setImportPreview(null);
+        setImportError(
+          "Ce fichier JSON ne contient aucune fiche de plante valide."
+        );
+        return;
+      }
+
+      const totalLogs = validPlants.reduce(
+        (acc, p) => acc + (Array.isArray(p.wateringLogs) ? p.wateringLogs.length : 0),
+        0
+      );
+      const totalDiagnoses = validPlants.reduce(
+        (acc, p) => acc + (Array.isArray(p.diagnoses) ? p.diagnoses.length : 0),
+        0
+      );
+
+      setImportPreview({
+        fileName: file.name,
+        plants: validPlants,
+        totalLogs,
+        totalDiagnoses,
+      });
+    } catch {
+      setImportPreview(null);
+      setImportError(
+        "Le fichier sélectionné n'est pas un fichier JSON valide."
+      );
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    setImportError(null);
+
+    try {
+      const res = await fetch("/api/plants/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: importMode,
+          plants: importPreview.plants,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Erreur lors de l'import.");
+      }
+
+      if (Array.isArray(data.plants)) {
+        setPlants(data.plants);
+      }
+
+      const { createdCount = 0, updatedCount = 0, importedDiagnosesCount = 0 } =
+        data.summary || {};
+      setBackupModalOpen(false);
+      setImportPreview(null);
+      setWaterSuccessToast(
+        `Import terminé : ${createdCount} ajoutée(s), ${updatedCount} mise(s) à jour, ${importedDiagnosesCount} diagnostic(s) santé ! 🌿`
+      );
+      setTimeout(() => setWaterSuccessToast(null), 5000);
+      router.refresh();
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : "Erreur lors de l'importation."
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const rooms = Array.from(new Set(plants.map((p) => p.location)));
 
   const filteredPlants = plants.filter((p) => {
@@ -153,6 +311,265 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
+      {/* Hidden JSON file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        onChange={handleSelectImportFile}
+        className="hidden"
+      />
+
+      {/* Export / Import Modal */}
+      {backupModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => !importing && setBackupModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-stone-100 bg-botanical-50/70 px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-botanical-700 text-white shadow-sm">
+                  <FileJson className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-stone-900">
+                    Exporter / Importer mes plantes
+                  </h2>
+                  <p className="text-xs text-stone-600">
+                    Noms, photos, historique d&apos;arrosage et carnet de santé complet
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBackupModalOpen(false)}
+                disabled={importing}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-200/60 hover:text-stone-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+              {importError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-800">
+                  {importError}
+                </div>
+              )}
+
+              {/* Export Section */}
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-900">
+                      Exporter ma collection ({plants.length} plante
+                      {plants.length > 1 ? "s" : ""})
+                    </h3>
+                    <p className="mt-0.5 text-xs text-stone-600">
+                      Télécharge un fichier <code className="font-mono">.json</code>{" "}
+                      contenant toutes vos plantes, leurs photos, les journaux
+                      d&apos;arrosage et tous les diagnostics du carnet de santé.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExportAll}
+                    disabled={exporting || plants.length === 0}
+                    className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-xl bg-botanical-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-botanical-800 disabled:opacity-50 transition-colors"
+                  >
+                    {exporting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {exporting ? "Export en cours..." : "Exporter (.json)"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Import Section */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-900">
+                    Importer une liste de plantes
+                  </h3>
+                  <p className="mt-0.5 text-xs text-stone-600">
+                    Restaurez une sauvegarde complète ou ajoutez une fiche de plante
+                    exportée depuis un autre appareil.
+                  </p>
+                </div>
+
+                {!importPreview ? (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-botanical-300 bg-botanical-50/40 p-8 text-center hover:bg-botanical-50 transition-colors"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-botanical-100 text-botanical-700">
+                      <Upload className="h-6 w-6" />
+                    </div>
+                    <span className="text-sm font-semibold text-botanical-900">
+                      Sélectionner un fichier JSON à importer
+                    </span>
+                    <span className="text-xs text-stone-500">
+                      Format accepté : sauvegarde WhatsUpPlant (.json)
+                    </span>
+                  </button>
+                ) : (
+                  <div className="space-y-4 rounded-2xl border border-botanical-200 bg-botanical-50/40 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-botanical-800">
+                          Fichier prêt : {importPreview.fileName}
+                        </p>
+                        <p className="mt-0.5 text-xs text-stone-600">
+                          <strong>{importPreview.plants.length}</strong> plante(s) •{" "}
+                          <strong>{importPreview.totalDiagnoses}</strong> diagnostic(s)
+                          de carnet de santé •{" "}
+                          <strong>{importPreview.totalLogs}</strong> arrosage(s)
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setImportPreview(null)}
+                        disabled={importing}
+                        className="text-xs font-semibold text-stone-500 hover:text-stone-800 underline"
+                      >
+                        Changer de fichier
+                      </button>
+                    </div>
+
+                    {/* Preview list of plants */}
+                    <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-xl bg-white p-2.5 border border-stone-200/80">
+                      {importPreview.plants.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs px-2 py-1 rounded-lg hover:bg-stone-50"
+                        >
+                          <span className="font-semibold text-stone-800 truncate">
+                            🌱 {p.nickname}{" "}
+                            <span className="font-normal text-stone-500">
+                              ({p.species})
+                            </span>
+                          </span>
+                          <span className="text-[11px] text-stone-500 flex-shrink-0 ml-2">
+                            {Array.isArray(p.diagnoses) ? p.diagnoses.length : 0} diag. •{" "}
+                            {Array.isArray(p.wateringLogs) ? p.wateringLogs.length : 0}{" "}
+                            arrosages
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Import Mode selector */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-stone-700">
+                        Comportement si une plante porte déjà le même nom :
+                      </label>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={() => setImportMode("merge")}
+                          className={`rounded-xl border p-2.5 text-left text-xs transition-colors ${
+                            importMode === "merge"
+                              ? "border-botanical-600 bg-botanical-700 text-white"
+                              : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                          }`}
+                        >
+                          <p className="font-bold">Fusionner</p>
+                          <p
+                            className={`mt-0.5 text-[11px] ${
+                              importMode === "merge"
+                                ? "text-botanical-100"
+                                : "text-stone-500"
+                            }`}
+                          >
+                            Met à jour et complète le carnet sans doublon
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setImportMode("append")}
+                          className={`rounded-xl border p-2.5 text-left text-xs transition-colors ${
+                            importMode === "append"
+                              ? "border-botanical-600 bg-botanical-700 text-white"
+                              : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                          }`}
+                        >
+                          <p className="font-bold">Tout ajouter</p>
+                          <p
+                            className={`mt-0.5 text-[11px] ${
+                              importMode === "append"
+                                ? "text-botanical-100"
+                                : "text-stone-500"
+                            }`}
+                          >
+                            Crée chaque plante comme nouvelle fiche
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setImportMode("replace")}
+                          className={`rounded-xl border p-2.5 text-left text-xs transition-colors ${
+                            importMode === "replace"
+                              ? "border-red-600 bg-red-600 text-white"
+                              : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                          }`}
+                        >
+                          <p className="font-bold">Remplacer tout</p>
+                          <p
+                            className={`mt-0.5 text-[11px] ${
+                              importMode === "replace"
+                                ? "text-red-100"
+                                : "text-stone-500"
+                            }`}
+                          >
+                            Écrase les plantes actuelles par ce fichier
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setImportPreview(null)}
+                        disabled={importing}
+                        className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmImport}
+                        disabled={importing}
+                        className="inline-flex items-center gap-2 rounded-xl bg-botanical-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-botanical-800 disabled:opacity-50"
+                      >
+                        {importing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        {importing
+                          ? "Importation..."
+                          : `Importer ${importPreview.plants.length} plante(s)`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast feedback */}
       {waterSuccessToast && (
         <div className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-2 rounded-2xl bg-botanical-800 px-4 py-3 text-sm font-medium text-white shadow-lg">
@@ -197,6 +614,18 @@ export function DashboardClient({
               <Stethoscope className="h-4 w-4 text-emerald-200" />
               Diagnostic IA
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setImportError(null);
+                setBackupModalOpen(true);
+              }}
+              className="flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
+              title="Exporter ou importer vos plantes et carnets de santé"
+            >
+              <ArrowDownUp className="h-4 w-4 text-botanical-200" />
+              Import / Export
+            </button>
           </div>
         </div>
 
@@ -350,17 +779,29 @@ export function DashboardClient({
             Aucune plante trouvée
           </h3>
           <p className="mx-auto mt-1 max-w-md text-sm text-stone-600">
-            Ajoutez votre première plante d&apos;intérieur : prenez-la en photo
-            et laissez l&apos;IA identifier son espèce et configurer ses rappels
-            d&apos;arrosage.
+            Ajoutez votre première plante d&apos;intérieur ou importez une
+            sauvegarde existante avec son carnet de santé.
           </p>
-          <Link
-            href="/plants/new"
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-botanical-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-botanical-800 transition-colors"
-          >
-            <Sparkles className="h-4 w-4" />
-            Créer un profil plante
-          </Link>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/plants/new"
+              className="inline-flex items-center gap-2 rounded-xl bg-botanical-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-botanical-800 transition-colors"
+            >
+              <Sparkles className="h-4 w-4" />
+              Créer un profil plante
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setImportError(null);
+                setBackupModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-botanical-300 bg-botanical-50 px-5 py-2.5 text-sm font-semibold text-botanical-800 hover:bg-botanical-100 transition-colors"
+            >
+              <Upload className="h-4 w-4" />
+              Importer une sauvegarde (.json)
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

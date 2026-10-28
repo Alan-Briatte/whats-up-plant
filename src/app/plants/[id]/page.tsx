@@ -26,6 +26,7 @@ import {
   ZoomIn,
   Loader2,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { getWateringUrgency } from "@/lib/utils";
 import { DiagnosisIssue, DiagnosisTreatmentStep } from "@/lib/gemini";
@@ -97,6 +98,7 @@ export default function PlantDetailPage() {
   const [watering, setWatering] = useState(false);
   const [waterNote, setWaterNote] = useState("");
   const [editing, setEditing] = useState(false);
+  const [exportingPlant, setExportingPlant] = useState(false);
 
   // Edit form states
   const [editNickname, setEditNickname] = useState("");
@@ -208,6 +210,35 @@ export default function PlantDetailPage() {
       }
     } finally {
       setGeneratingNickname(false);
+    }
+  };
+
+  const handleExportPlant = async () => {
+    if (!plant) return;
+    setExportingPlant(true);
+    try {
+      const res = await fetch(
+        `/api/plants/backup?plantId=${encodeURIComponent(plant.id)}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const slug = plant.nickname
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-|-$/g, "");
+      a.href = url;
+      a.download = `whatsupplant-${slug || "plante"}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingPlant(false);
     }
   };
 
@@ -395,7 +426,7 @@ export default function PlantDetailPage() {
       )}
 
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 hover:text-botanical-800"
@@ -404,7 +435,21 @@ export default function PlantDetailPage() {
           Retour à mes plantes
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportPlant}
+            disabled={exportingPlant}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-200 bg-botanical-50 px-3.5 py-2 text-xs font-semibold text-botanical-800 hover:bg-botanical-100 disabled:opacity-50"
+            title="Exporter cette plante avec son carnet de santé (.json)"
+          >
+            {exportingPlant ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            Exporter la fiche
+          </button>
           <button
             onClick={() => setEditing(!editing)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
