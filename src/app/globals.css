@@ -68,6 +68,18 @@ html.dark .glass-pill {
 }
 
 /* Surfaces & Cards */
+.hydration-track {
+  background-color: #dde8e1;
+  box-shadow: inset 0 1px 2px rgba(15, 35, 24, 0.08);
+}
+html.dark .hydration-track {
+  background-color: #0e1a13 !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
+html.dark .bg-stone-200\/80,
+html.dark .bg-stone-200\/90 {
+  background-color: #1e3327 !important;
+}
 html.dark .bg-white {
   background-color: #122018 !important;
 }

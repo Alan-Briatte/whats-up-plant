@@ -818,10 +818,14 @@ export function DashboardClient({
 
             {/* Global Hydration Progress Bar */}
             <div className="mt-3.5 space-y-1.5">
-              <div className="h-3 w-full overflow-hidden rounded-full bg-stone-200/80 p-0.5">
+              <div className="hydration-track h-3 w-full overflow-hidden rounded-full">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-500 via-teal-400 to-emerald-500 transition-all duration-500"
-                  style={{ width: `${Math.max(8, avgHydration)}%` }}
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.max(8, avgHydration)}%`,
+                    background:
+                      "linear-gradient(90deg, #0ea5e9 0%, #2dd4bf 50%, #10b981 100%)",
+                  }}
                 />
               </div>
             </div>
@@ -942,15 +946,22 @@ export function DashboardClient({
                       </p>
                       <p className="truncate text-xs text-stone-500">
                         {plant.location} •{" "}
-                        <span className={hydration.textColorClass + " font-semibold"}>
+                        <span
+                          className={
+                            hydration.textColorClass + " font-semibold"
+                          }
+                        >
                           {hydration.label}
                         </span>
                       </p>
                       <div className="mt-1.5 flex items-center gap-2">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200">
+                        <div className="hydration-track h-2 flex-1 overflow-hidden rounded-full">
                           <div
-                            className={`h-full rounded-full ${hydration.barColorClass}`}
-                            style={{ width: `${hydration.percent}%` }}
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${hydration.percent}%`,
+                              background: hydration.barGradient,
+                            }}
                           />
                         </div>
                         <span className="text-[10px] font-bold text-stone-600">
@@ -1138,20 +1149,25 @@ export function DashboardClient({
                 </Link>
 
                 {/* Inline Hydration Gauge */}
-                <div className="sm:w-52 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
+                <div className="sm:w-56 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="font-bold text-stone-700 flex items-center gap-1">
                       <Droplets className="h-3.5 w-3.5 text-sky-600" />
                       {hydration.percent}%
                     </span>
-                    <span className={`text-[11px] font-bold ${hydration.textColorClass}`}>
+                    <span
+                      className={`text-[11px] font-bold truncate ${hydration.textColorClass}`}
+                    >
                       {hydration.label}
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200/80">
+                  <div className="hydration-track h-2.5 w-full overflow-hidden rounded-full">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${hydration.barColorClass}`}
-                      style={{ width: `${hydration.percent}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${hydration.percent}%`,
+                        background: hydration.barGradient,
+                      }}
                     />
                   </div>
                 </div>
@@ -1261,24 +1277,29 @@ export function DashboardClient({
                     </Link>
 
                     {/* VISUAL WATER RESERVE GAUGE (%) */}
-                    <div className="mt-4 rounded-2xl border border-stone-200/80 bg-stone-50/80 p-3.5 space-y-2">
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="font-bold text-stone-700 flex items-center gap-1.5">
-                          <Droplets className="h-3.5 w-3.5 text-sky-600" />
-                          Réserve d&apos;eau
-                        </span>
+                    <div className="mt-4 rounded-2xl border border-stone-200/80 bg-stone-50/80 p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Droplets className="h-3.5 w-3.5 flex-shrink-0 text-sky-600" />
+                          <span className="text-xs font-bold text-stone-700 truncate">
+                            {hydration.label}
+                          </span>
+                        </div>
                         <span
-                          className={`font-extrabold ${hydration.textColorClass}`}
+                          className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${hydration.badgeClass}`}
                         >
-                          {hydration.percent}% • {hydration.label}
+                          {hydration.percent}% d&apos;eau
                         </span>
                       </div>
 
                       {/* Gauge Track & Fill */}
-                      <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-200/90 p-0.5">
+                      <div className="hydration-track h-2.5 w-full overflow-hidden rounded-full">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${hydration.barColorClass}`}
-                          style={{ width: `${hydration.percent}%` }}
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${hydration.percent}%`,
+                            background: hydration.barGradient,
+                          }}
                         />
                       </div>
 

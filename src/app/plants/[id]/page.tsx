@@ -877,10 +877,10 @@ export default function PlantDetailPage() {
                   </div>
 
                   {/* Gauge Bar */}
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/90 p-0.5 border border-sky-200/60">
+                  <div className="hydration-track h-2.5 w-full overflow-hidden rounded-full">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${hydration.barColorClass}`}
-                      style={{ width: `${hydration.percent}%` }}
+                      style={{ width: `${hydration.percent}%`, background: hydration.barGradient }}
                     />
                   </div>
 

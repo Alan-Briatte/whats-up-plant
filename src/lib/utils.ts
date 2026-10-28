@@ -110,7 +110,6 @@ export function deepDecodeHtmlEntities<T>(value: T): T {
 export function getDaysUntilWatering(nextWateringAt: Date | string): number {
   const now = new Date();
   const target = new Date(nextWateringAt);
-  // Compare calendar days or exact hours
   const diffMs = target.getTime() - now.getTime();
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
@@ -154,7 +153,7 @@ export function getWateringUrgency(nextWateringAt: Date | string): {
  * pour afficher une jauge visuelle sur chaque carte et fiche plante.
  */
 export function getHydrationStatus(
-  lastWateredAt: Date | string,
+  _lastWateredAt: Date | string,
   nextWateringAt: Date | string,
   wateringIntervalDays: number
 ): {
@@ -162,18 +161,16 @@ export function getHydrationStatus(
   status: "overdue" | "today" | "soon" | "ok";
   label: string;
   barColorClass: string;
+  barGradient: string;
   textColorClass: string;
+  badgeClass: string;
 } {
   const urgency = getWateringUrgency(nextWateringAt);
   const now = Date.now();
-  const last = new Date(lastWateredAt).getTime();
   const next = new Date(nextWateringAt).getTime();
-  const totalSpan = Math.max(
-    next - last,
-    Math.max(1, wateringIntervalDays) * 24 * 60 * 60 * 1000
-  );
+  const cycleMs = Math.max(1, wateringIntervalDays) * 24 * 60 * 60 * 1000;
 
-  let rawRatio = (next - now) / totalSpan;
+  let rawRatio = (next - now) / cycleMs;
   if (Number.isNaN(rawRatio)) {
     rawRatio = 0.5;
   }
@@ -181,11 +178,11 @@ export function getHydrationStatus(
   let percent: number;
   if (urgency.status === "overdue") {
     const overdueDays = Math.abs(urgency.daysDiff);
-    percent = Math.max(4, Math.round(14 - overdueDays * 3));
+    percent = Math.max(8, Math.round(16 - overdueDays * 3));
   } else if (urgency.status === "today") {
-    percent = Math.max(12, Math.min(22, Math.round(rawRatio * 100)));
+    percent = 16;
   } else {
-    percent = Math.max(20, Math.min(100, Math.round(rawRatio * 100)));
+    percent = Math.max(24, Math.min(100, Math.round(rawRatio * 100)));
   }
 
   if (urgency.status === "overdue") {
@@ -194,7 +191,10 @@ export function getHydrationStatus(
       status: "overdue",
       label: urgency.label,
       barColorClass: "bg-gradient-to-r from-red-500 via-orange-500 to-amber-500",
-      textColorClass: "text-red-600 dark:text-red-400",
+      barGradient:
+        "linear-gradient(90deg, #ef4444 0%, #f97316 55%, #f59e0b 100%)",
+      textColorClass: "text-red-700",
+      badgeClass: "bg-red-100 text-red-800 border border-red-200",
     };
   }
 
@@ -204,7 +204,9 @@ export function getHydrationStatus(
       status: "today",
       label: urgency.label,
       barColorClass: "bg-gradient-to-r from-amber-500 to-sky-500",
-      textColorClass: "text-amber-700 dark:text-amber-300",
+      barGradient: "linear-gradient(90deg, #f59e0b 0%, #0ea5e9 100%)",
+      textColorClass: "text-amber-800",
+      badgeClass: "bg-amber-100 text-amber-800 border border-amber-200",
     };
   }
 
@@ -214,7 +216,9 @@ export function getHydrationStatus(
       status: "soon",
       label: urgency.label,
       barColorClass: "bg-gradient-to-r from-sky-500 to-teal-400",
-      textColorClass: "text-sky-700 dark:text-sky-300",
+      barGradient: "linear-gradient(90deg, #0ea5e9 0%, #2dd4bf 100%)",
+      textColorClass: "text-sky-800",
+      badgeClass: "bg-sky-100 text-sky-800 border border-sky-200",
     };
   }
 
@@ -223,6 +227,9 @@ export function getHydrationStatus(
     status: "ok",
     label: urgency.label,
     barColorClass: "bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500",
-    textColorClass: "text-emerald-700 dark:text-emerald-300",
+    barGradient:
+      "linear-gradient(90deg, #10b981 0%, #14b8a6 50%, #0ea5e9 100%)",
+    textColorClass: "text-emerald-800",
+    badgeClass: "bg-emerald-100 text-emerald-800 border border-emerald-200",
   };
 }
