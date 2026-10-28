@@ -214,25 +214,53 @@ export function Navbar({ user }: NavbarProps) {
     return `${window.location.origin}/reset-password?token=${token}`;
   };
 
+  const copyTextToClipboard = async (text: string): Promise<boolean> => {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fallback to textarea execCommand below
+      }
+    }
+
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.top = "0";
+      textarea.style.left = "0";
+      textarea.style.width = "1px";
+      textarea.style.height = "1px";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
   const copyInviteLink = async (id: string, token: string) => {
     const url = buildInviteUrl(token);
-    try {
-      await navigator.clipboard.writeText(url);
+    const copied = await copyTextToClipboard(url);
+    if (copied) {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2500);
-    } catch {
-      // fallback
     }
   };
 
   const copyResetLink = async (userId: string, token: string) => {
     const url = buildResetUrl(token);
-    try {
-      await navigator.clipboard.writeText(url);
+    const copied = await copyTextToClipboard(url);
+    if (copied) {
       setCopiedId(`reset_${userId}`);
       setTimeout(() => setCopiedId(null), 2500);
-    } catch {
-      // fallback
     }
   };
 
@@ -757,9 +785,17 @@ export function Navbar({ user }: NavbarProps) {
                                 )}
                               </div>
 
-                              <p className="text-[11px] text-stone-500 truncate font-mono">
-                                {buildInviteUrl(inv.token)}
-                              </p>
+                              <input
+                                type="text"
+                                readOnly
+                                value={buildInviteUrl(inv.token)}
+                                onClick={(e) => {
+                                  e.currentTarget.select();
+                                  copyInviteLink(inv.id, inv.token);
+                                }}
+                                className="w-full cursor-pointer rounded-lg border border-stone-200/80 bg-white px-2.5 py-1 text-[11px] font-mono text-stone-600 focus:border-botanical-600 focus:outline-none"
+                                title="Cliquez pour sélectionner et copier le lien"
+                              />
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0">
@@ -836,6 +872,19 @@ export function Navbar({ user }: NavbarProps) {
                           {u.email} • Inscrit le{" "}
                           {new Date(u.createdAt).toLocaleDateString("fr-FR")}
                         </p>
+                        {u.activeResetToken && (
+                          <input
+                            type="text"
+                            readOnly
+                            value={buildResetUrl(u.activeResetToken)}
+                            onClick={(e) => {
+                              e.currentTarget.select();
+                              copyResetLink(u.id, u.activeResetToken!);
+                            }}
+                            className="mt-1.5 w-full cursor-pointer rounded-lg border border-amber-200 bg-white px-2.5 py-1 text-[11px] font-mono text-stone-600 focus:border-botanical-600 focus:outline-none"
+                            title="Cliquez pour sélectionner et copier le lien de réinitialisation"
+                          />
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
