@@ -9,9 +9,9 @@ import {
   Stethoscope,
   MapPin,
   Sun,
+  CloudRain,
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Sparkles,
   Search,
   BellRing,
@@ -22,8 +22,12 @@ import {
   X,
   Loader2,
   ArrowDownUp,
+  LayoutGrid,
+  List,
+  HeartPulse,
+  CheckCheck,
 } from "lucide-react";
-import { getWateringUrgency } from "@/lib/utils";
+import { getWateringUrgency, getHydrationStatus } from "@/lib/utils";
 import type { BackupPlant } from "@/app/api/plants/backup/route";
 
 export interface PlantItem {
@@ -54,8 +58,13 @@ export function DashboardClient({
   const router = useRouter();
   const [plants, setPlants] = useState<PlantItem[]>(initialPlants);
   const [selectedRoom, setSelectedRoom] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "DUE" | "HEALTH">(
+    "ALL"
+  );
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [wateringId, setWateringId] = useState<string | null>(null);
+  const [batchWatering, setBatchWatering] = useState(false);
   const [waterSuccessToast, setWaterSuccessToast] = useState<string | null>(
     null
   );
@@ -87,8 +96,23 @@ export function DashboardClient({
 
   const warningPlants = plants.filter((p) => p.healthStatus !== "HEALTHY");
 
+  const avgHydration =
+    plants.length > 0
+      ? Math.round(
+          plants.reduce(
+            (acc, p) =>
+              acc +
+              getHydrationStatus(
+                p.lastWateredAt,
+                p.nextWateringAt,
+                p.wateringIntervalDays
+              ).percent,
+            0
+          ) / plants.length
+        )
+      : 100;
+
   useEffect(() => {
-    // Si des plantes sont à arroser aujourd'hui et les notifications sont autorisées
     if (
       duePlants.length > 0 &&
       typeof window !== "undefined" &&
@@ -116,7 +140,9 @@ export function DashboardClient({
       const res = await fetch(`/api/plants/${plant.id}/water`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes: "Arrosage rapide depuis le tableau de bord" }),
+        body: JSON.stringify({
+          notes: "Arrosage rapide depuis le tableau de bord",
+        }),
       });
       const data = await res.json();
       if (res.ok && data.plant) {
@@ -141,6 +167,49 @@ export function DashboardClient({
       }
     } finally {
       setWateringId(null);
+    }
+  };
+
+  const handleWaterAllDue = async () => {
+    if (duePlants.length === 0 || batchWatering) return;
+    setBatchWatering(true);
+    try {
+      const updatedMap = new Map<
+        string,
+        { lastWateredAt: string; nextWateringAt: string }
+      >();
+      for (const plant of duePlants) {
+        const res = await fetch(`/api/plants/${plant.id}/water`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notes: "Arrosage groupé depuis le tableau de bord",
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.plant) {
+          updatedMap.set(plant.id, {
+            lastWateredAt: data.plant.lastWateredAt,
+            nextWateringAt: data.plant.nextWateringAt,
+          });
+        }
+      }
+      if (updatedMap.size > 0) {
+        setPlants((prev) =>
+          prev.map((p) => {
+            const up = updatedMap.get(p.id);
+            return up ? { ...p, ...up } : p;
+          })
+        );
+        setUndoWaterInfo(null);
+        setWaterSuccessToast(
+          `${updatedMap.size} plante(s) arrosée(s) avec succès ! 💧✨`
+        );
+        setTimeout(() => setWaterSuccessToast(null), 5000);
+        router.refresh();
+      }
+    } finally {
+      setBatchWatering(false);
     }
   };
 
@@ -245,11 +314,13 @@ export function DashboardClient({
       }
 
       const totalLogs = validPlants.reduce(
-        (acc, p) => acc + (Array.isArray(p.wateringLogs) ? p.wateringLogs.length : 0),
+        (acc, p) =>
+          acc + (Array.isArray(p.wateringLogs) ? p.wateringLogs.length : 0),
         0
       );
       const totalDiagnoses = validPlants.reduce(
-        (acc, p) => acc + (Array.isArray(p.diagnoses) ? p.diagnoses.length : 0),
+        (acc, p) =>
+          acc + (Array.isArray(p.diagnoses) ? p.diagnoses.length : 0),
         0
       );
 
@@ -292,8 +363,11 @@ export function DashboardClient({
         setPlants(data.plants);
       }
 
-      const { createdCount = 0, updatedCount = 0, importedDiagnosesCount = 0 } =
-        data.summary || {};
+      const {
+        createdCount = 0,
+        updatedCount = 0,
+        importedDiagnosesCount = 0,
+      } = data.summary || {};
       setBackupModalOpen(false);
       setImportPreview(null);
       setWaterSuccessToast(
@@ -314,36 +388,43 @@ export function DashboardClient({
 
   const filteredPlants = plants.filter((p) => {
     const matchesRoom = selectedRoom === "ALL" || p.location === selectedRoom;
+    const urgency = getWateringUrgency(p.nextWateringAt);
+    const isDue = urgency.status === "overdue" || urgency.status === "today";
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "DUE" && isDue) ||
+      (statusFilter === "HEALTH" && p.healthStatus !== "HEALTHY");
+
     const q = searchQuery.trim().toLowerCase();
     const matchesQuery =
       !q ||
       p.nickname.toLowerCase().includes(q) ||
       p.species.toLowerCase().includes(q) ||
       p.location.toLowerCase().includes(q);
-    return matchesRoom && matchesQuery;
+    return matchesRoom && matchesStatus && matchesQuery;
   });
 
   const renderHealthBadge = (status: string) => {
     if (status === "CRITICAL") {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100/95 px-2.5 py-1 text-xs font-semibold text-red-800 shadow-sm">
-          <AlertTriangle className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100/95 px-2.5 py-1 text-[11px] font-bold text-red-800 shadow-sm backdrop-blur-md">
+          <AlertTriangle className="h-3 w-3" />
           Soin urgent
         </span>
       );
     }
     if (status === "WARNING") {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/95 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm">
-          <AlertTriangle className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/95 px-2.5 py-1 text-[11px] font-bold text-amber-800 shadow-sm backdrop-blur-md">
+          <AlertTriangle className="h-3 w-3" />
           À surveiller
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/95 px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-sm">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        En pleine forme
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/95 px-2.5 py-1 text-[11px] font-bold text-emerald-800 shadow-sm backdrop-blur-md">
+        <CheckCircle2 className="h-3 w-3" />
+        Saine
       </span>
     );
   };
@@ -380,7 +461,8 @@ export function DashboardClient({
                     Exporter / Importer mes plantes
                   </h2>
                   <p className="text-xs text-stone-600">
-                    Noms, photos, historique d&apos;arrosage et carnet de santé complet
+                    Noms, photos, historique d&apos;arrosage et carnet de santé
+                    complet
                   </p>
                 </div>
               </div>
@@ -410,9 +492,10 @@ export function DashboardClient({
                       {plants.length > 1 ? "s" : ""})
                     </h3>
                     <p className="mt-0.5 text-xs text-stone-600">
-                      Télécharge un fichier <code className="font-mono">.json</code>{" "}
-                      contenant toutes vos plantes, leurs photos, les journaux
-                      d&apos;arrosage et tous les diagnostics du carnet de santé.
+                      Télécharge un fichier{" "}
+                      <code className="font-mono">.json</code> contenant toutes
+                      vos plantes, leurs photos, les journaux d&apos;arrosage et
+                      tous les diagnostics du carnet de santé.
                     </p>
                   </div>
                   <button
@@ -438,8 +521,8 @@ export function DashboardClient({
                     Importer une liste de plantes
                   </h3>
                   <p className="mt-0.5 text-xs text-stone-600">
-                    Restaurez une sauvegarde complète ou ajoutez une fiche de plante
-                    exportée depuis un autre appareil.
+                    Restaurez une sauvegarde complète ou ajoutez une fiche de
+                    plante exportée depuis un autre appareil.
                   </p>
                 </div>
 
@@ -467,9 +550,10 @@ export function DashboardClient({
                           Fichier prêt : {importPreview.fileName}
                         </p>
                         <p className="mt-0.5 text-xs text-stone-600">
-                          <strong>{importPreview.plants.length}</strong> plante(s) •{" "}
-                          <strong>{importPreview.totalDiagnoses}</strong> diagnostic(s)
-                          de carnet de santé •{" "}
+                          <strong>{importPreview.plants.length}</strong>{" "}
+                          plante(s) •{" "}
+                          <strong>{importPreview.totalDiagnoses}</strong>{" "}
+                          diagnostic(s) de carnet de santé •{" "}
                           <strong>{importPreview.totalLogs}</strong> arrosage(s)
                         </p>
                       </div>
@@ -497,8 +581,13 @@ export function DashboardClient({
                             </span>
                           </span>
                           <span className="text-[11px] text-stone-500 flex-shrink-0 ml-2">
-                            {Array.isArray(p.diagnoses) ? p.diagnoses.length : 0} diag. •{" "}
-                            {Array.isArray(p.wateringLogs) ? p.wateringLogs.length : 0}{" "}
+                            {Array.isArray(p.diagnoses)
+                              ? p.diagnoses.length
+                              : 0}{" "}
+                            diag. •{" "}
+                            {Array.isArray(p.wateringLogs)
+                              ? p.wateringLogs.length
+                              : 0}{" "}
                             arrosages
                           </span>
                         </div>
@@ -611,7 +700,7 @@ export function DashboardClient({
 
       {/* Toast feedback */}
       {waterSuccessToast && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-3 rounded-2xl bg-botanical-800 px-4 py-3 text-sm font-medium text-white shadow-lg">
+        <div className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-3 rounded-2xl bg-botanical-800 px-4 py-3 text-sm font-medium text-white shadow-xl border border-botanical-600/40">
           <Droplets className="h-4 w-4 text-sky-300" />
           <span>{waterSuccessToast}</span>
           {undoWaterInfo && (
@@ -626,41 +715,48 @@ export function DashboardClient({
         </div>
       )}
 
-      {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl border border-transparent dark:border-botanical-800 bg-gradient-to-br from-botanical-800 via-botanical-700 to-emerald-800 p-6 sm:p-8 text-white shadow-md">
-        <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-botanical-200">
-              Tableau de bord botanique
-            </p>
-            <h1 className="mt-1 text-2xl sm:text-3xl font-bold">
+      {/* BENTO HEADER GRID */}
+      <div className="grid gap-4 lg:grid-cols-12">
+        {/* Bento Card 1: Main Welcome & Collection Hero (7 cols) */}
+        <div className="lg:col-span-7 relative overflow-hidden rounded-3xl border border-botanical-700/30 dark:border-botanical-800 bg-gradient-to-br from-botanical-800 via-botanical-700 to-emerald-800 p-6 sm:p-7 text-white shadow-lg flex flex-col justify-between">
+          {/* Decorative soft glow */}
+          <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-emerald-400/15 blur-2xl" />
+
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-botanical-100 backdrop-blur-md">
+              <Sparkles className="h-3 w-3 text-emerald-300" />
+              Jardin Connecté • Bento & Glass
+            </div>
+            <h1 className="mt-3 text-2xl sm:text-3xl font-extrabold tracking-tight">
               Bonjour {userName} 🌿
             </h1>
-            <p className="mt-1.5 max-w-xl text-sm text-botanical-100">
+            <p className="mt-1.5 max-w-xl text-sm text-botanical-100 leading-relaxed">
               {duePlants.length > 0
-                ? `Vous avez ${duePlants.length} plante${
-                    duePlants.length > 1 ? "s" : ""
-                  } qui attend${
-                    duePlants.length > 1 ? "ent" : ""
-                  } un arrosage aujourd'hui.`
-                : "Toutes vos plantes sont parfaitement hydratées aujourd'hui !"}
+                ? `${duePlants.length} plante${
+                    duePlants.length > 1 ? "s ont" : " a"
+                  } besoin d'eau aujourd'hui. Vos ${
+                    plants.length
+                  } plantes sont réparties dans ${
+                    rooms.length || 1
+                  } espace${rooms.length > 1 ? "s" : ""}.`
+                : `Toutes vos ${plants.length} plantes disposent d'une réserve d'eau optimale aujourd'hui !`}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="relative z-10 mt-6 flex flex-wrap items-center gap-2.5 pt-2">
             <Link
               href="/plants/new"
-              className="flex items-center gap-2 rounded-2xl border border-transparent dark:border-botanical-500/50 bg-white px-4 py-2.5 text-sm font-semibold text-botanical-900 shadow-sm hover:bg-botanical-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-botanical-900 shadow-sm hover:bg-botanical-50 transition-all hover:-translate-y-0.5"
             >
               <Plus className="h-4 w-4 text-botanical-700" />
               Ajouter une plante
             </Link>
             <Link
               href="/diagnose"
-              className="flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-4 py-2.5 text-xs sm:text-sm font-bold text-white backdrop-blur-md hover:bg-white/20 transition-all"
             >
               <Stethoscope className="h-4 w-4 text-emerald-200" />
-              Diagnostic IA
+              Docteur IA
             </Link>
             <button
               type="button"
@@ -668,50 +764,143 @@ export function DashboardClient({
                 setImportError(null);
                 setBackupModalOpen(true);
               }}
-              className="flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-white backdrop-blur-md hover:bg-white/20 transition-all"
               title="Exporter ou importer vos plantes et carnets de santé"
             >
               <ArrowDownUp className="h-4 w-4 text-botanical-200" />
-              Import / Export
+              Sauvegarde JSON
             </button>
           </div>
         </div>
 
-        {/* Quick KPIs */}
-        <div className="mt-6 grid grid-cols-3 gap-3 border-t border-white/15 pt-5">
-          <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <p className="text-xs text-botanical-100">Total plantes</p>
-            <p className="mt-0.5 text-xl sm:text-2xl font-bold">{plants.length}</p>
+        {/* Bento Card 2: Global Hydration Reserve & Status Cockpit (5 cols) */}
+        <div className="lg:col-span-5 bento-card rounded-3xl p-6 flex flex-col justify-between gap-4">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">
+                Hydratation Globale
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-bold text-sky-800">
+                <Droplets className="h-3.5 w-3.5 text-sky-600" />
+                Réserve moy. {avgHydration}%
+              </span>
+            </div>
+
+            <div className="mt-3 flex items-baseline justify-between">
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900">
+                  {duePlants.length === 0
+                    ? "100% à jour"
+                    : `${duePlants.length} à arroser`}
+                </p>
+                <p className="text-xs text-stone-500">
+                  {plants.length - duePlants.length} plante(s) hydratée(s) sur{" "}
+                  {plants.length}
+                </p>
+              </div>
+
+              {duePlants.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleWaterAllDue}
+                  disabled={batchWatering}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50 transition-all"
+                >
+                  {batchWatering ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCheck className="h-3.5 w-3.5" />
+                  )}
+                  Tout arroser ({duePlants.length})
+                </button>
+              )}
+            </div>
+
+            {/* Global Hydration Progress Bar */}
+            <div className="mt-3.5 space-y-1.5">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-stone-200/80 p-0.5">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-sky-500 via-teal-400 to-emerald-500 transition-all duration-500"
+                  style={{ width: `${Math.max(8, avgHydration)}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <p className="text-xs text-botanical-100">À arroser</p>
-            <p className="mt-0.5 text-xl sm:text-2xl font-bold text-sky-200">
-              {duePlants.length}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <p className="text-xs text-botanical-100">Santé à suivre</p>
-            <p className="mt-0.5 text-xl sm:text-2xl font-bold text-amber-200">
-              {warningPlants.length}
-            </p>
+
+          {/* Mini Bento KPIs Row inside Cockpit */}
+          <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-stone-200/70">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+              className={`rounded-2xl p-2.5 text-left transition-all border ${
+                statusFilter === "ALL"
+                  ? "border-botanical-300 bg-botanical-50/80"
+                  : "border-stone-200/70 bg-stone-50/70 hover:bg-stone-100"
+              }`}
+            >
+              <p className="text-[11px] font-semibold text-stone-500">
+                Collection
+              </p>
+              <p className="mt-0.5 text-lg font-extrabold text-stone-900">
+                {plants.length} 🌱
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setStatusFilter(statusFilter === "DUE" ? "ALL" : "DUE")
+              }
+              className={`rounded-2xl p-2.5 text-left transition-all border ${
+                statusFilter === "DUE"
+                  ? "border-sky-300 bg-sky-50"
+                  : "border-stone-200/70 bg-stone-50/70 hover:bg-sky-50/50"
+              }`}
+            >
+              <p className="text-[11px] font-semibold text-stone-500">
+                Soif aujourd&apos;hui
+              </p>
+              <p className="mt-0.5 text-lg font-extrabold text-sky-700">
+                {duePlants.length} 💧
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setStatusFilter(statusFilter === "HEALTH" ? "ALL" : "HEALTH")
+              }
+              className={`rounded-2xl p-2.5 text-left transition-all border ${
+                statusFilter === "HEALTH"
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-stone-200/70 bg-stone-50/70 hover:bg-amber-50/50"
+              }`}
+            >
+              <p className="text-[11px] font-semibold text-stone-500">
+                En soin
+              </p>
+              <p className="mt-0.5 text-lg font-extrabold text-amber-700">
+                {warningPlants.length} 🩺
+              </p>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Priority Watering Reminders Section */}
+      {/* Priority Watering Reminders Bento Strip */}
       {duePlants.length > 0 && (
-        <section className="rounded-3xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-sky-50/60 p-5 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
+        <section className="bento-card rounded-3xl border-sky-200/90 bg-gradient-to-r from-sky-50/90 via-white/90 to-sky-50/70 p-5">
+          <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-white shadow-sm">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm">
                 <BellRing className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-stone-900">
-                  Rappels d&apos;arrosage prioritaires ({duePlants.length})
+                <h2 className="text-sm sm:text-base font-extrabold text-stone-900">
+                  Arrosages prioritaires du jour ({duePlants.length})
                 </h2>
                 <p className="text-xs text-stone-600">
-                  Validez l&apos;arrosage en un clic pour recalculer le prochain rappel
+                  Leur réserve d&apos;eau est basse — validez en un clic
                 </p>
               </div>
             </div>
@@ -719,11 +908,15 @@ export function DashboardClient({
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {duePlants.map((plant) => {
-              const urgency = getWateringUrgency(plant.nextWateringAt);
+              const hydration = getHydrationStatus(
+                plant.lastWateredAt,
+                plant.nextWateringAt,
+                plant.wateringIntervalDays
+              );
               return (
                 <div
                   key={plant.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-sky-200/80 bg-white p-3.5 shadow-sm"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-sky-200/80 bg-white p-3 shadow-sm hover:border-sky-300 transition-all"
                 >
                   <Link
                     href={`/plants/${plant.id}`}
@@ -743,29 +936,34 @@ export function DashboardClient({
                         </div>
                       )}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-stone-900">
                         {plant.nickname}
                       </p>
                       <p className="truncate text-xs text-stone-500">
                         {plant.location} •{" "}
-                        <span
-                          className={
-                            urgency.status === "overdue"
-                              ? "font-semibold text-red-600"
-                              : "font-semibold text-sky-700"
-                          }
-                        >
-                          {urgency.label}
+                        <span className={hydration.textColorClass + " font-semibold"}>
+                          {hydration.label}
                         </span>
                       </p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200">
+                          <div
+                            className={`h-full rounded-full ${hydration.barColorClass}`}
+                            style={{ width: `${hydration.percent}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-bold text-stone-600">
+                          {hydration.percent}%
+                        </span>
+                      </div>
                     </div>
                   </Link>
 
                   <button
                     onClick={(e) => handleQuickWater(plant, e)}
                     disabled={wateringId === plant.id}
-                    className="flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50 transition-colors"
+                    className="flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50 transition-colors"
                   >
                     <Droplets className="h-3.5 w-3.5" />
                     {wateringId === plant.id ? "..." : "Arroser"}
@@ -777,15 +975,19 @@ export function DashboardClient({
         </section>
       )}
 
-      {/* Search & Room Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      {/* Search, Room Pills & View Mode Bar */}
+      <div className="bento-card rounded-2xl p-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        {/* Room Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
           <button
-            onClick={() => setSelectedRoom("ALL")}
-            className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors ${
-              selectedRoom === "ALL"
+            onClick={() => {
+              setSelectedRoom("ALL");
+              setStatusFilter("ALL");
+            }}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all ${
+              selectedRoom === "ALL" && statusFilter === "ALL"
                 ? "bg-botanical-700 text-white shadow-sm"
-                : "bg-white border border-stone-200 text-stone-700 hover:bg-botanical-50"
+                : "bg-stone-100/80 text-stone-700 hover:bg-botanical-50"
             }`}
           >
             Toutes ({plants.length})
@@ -794,32 +996,63 @@ export function DashboardClient({
             <button
               key={room}
               onClick={() => setSelectedRoom(room)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`inline-flex items-center gap-1 rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all ${
                 selectedRoom === room
                   ? "bg-botanical-700 text-white shadow-sm"
-                  : "bg-white border border-stone-200 text-stone-700 hover:bg-botanical-50"
+                  : "bg-stone-100/80 text-stone-700 hover:bg-botanical-50"
               }`}
             >
+              <MapPin className="h-3 w-3 opacity-75" />
               {room} ({plants.filter((p) => p.location === room).length})
             </button>
           ))}
         </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher une plante..."
-            className="w-full rounded-xl border border-stone-200 bg-white py-2 pl-9 pr-3 text-xs focus:border-botanical-600 focus:outline-none"
-          />
+        {/* Search & View Switcher */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:w-60">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher une plante, pièce..."
+              className="w-full rounded-xl border border-stone-200/90 bg-white/90 py-1.5 pl-9 pr-3 text-xs font-medium focus:border-botanical-600 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center rounded-xl border border-stone-200/80 bg-stone-100/70 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`rounded-lg p-1.5 transition-colors ${
+                viewMode === "grid"
+                  ? "bg-white text-botanical-800 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+              title="Vue Grille Bento"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`rounded-lg p-1.5 transition-colors ${
+                viewMode === "list"
+                  ? "bg-white text-botanical-800 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+              title="Vue Liste Compacte"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Plants Grid */}
+      {/* PLANTS DISPLAY */}
       {filteredPlants.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-botanical-300 bg-white p-12 text-center">
+        <div className="bento-card rounded-3xl border-dashed p-12 text-center">
           <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-botanical-100 text-3xl">
             🌱
           </div>
@@ -851,29 +1084,132 @@ export function DashboardClient({
             </button>
           </div>
         </div>
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      ) : viewMode === "list" ? (
+        /* COMPACT LIST VIEW WITH HYDRATION GAUGE */
+        <div className="space-y-2.5">
           {filteredPlants.map((plant) => {
-            const urgency = getWateringUrgency(plant.nextWateringAt);
+            const hydration = getHydrationStatus(
+              plant.lastWateredAt,
+              plant.nextWateringAt,
+              plant.wateringIntervalDays
+            );
             const isDue =
-              urgency.status === "overdue" || urgency.status === "today";
+              hydration.status === "overdue" || hydration.status === "today";
 
             return (
               <div
                 key={plant.id}
-                className="group flex flex-col overflow-hidden rounded-3xl border border-stone-200/90 bg-white shadow-sm transition-all hover:shadow-md hover:border-botanical-300"
+                className="bento-card group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl p-3.5 transition-all hover:border-botanical-300"
               >
-                {/* Card Image */}
                 <Link
                   href={`/plants/${plant.id}`}
-                  className="relative aspect-[16/11] w-full overflow-hidden bg-botanical-100"
+                  className="flex items-center gap-3.5 min-w-0 flex-1"
+                >
+                  <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-botanical-100">
+                    {plant.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={plant.imageUrl}
+                        alt={plant.nickname}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-2xl">
+                        🪴
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-extrabold text-stone-900 group-hover:text-botanical-700 transition-colors truncate">
+                        {plant.nickname}
+                      </h3>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-600">
+                        <MapPin className="h-3 w-3 text-botanical-600" />
+                        {plant.location}
+                      </span>
+                      {renderHealthBadge(plant.healthStatus)}
+                    </div>
+                    <p className="text-xs text-stone-500 truncate mt-0.5">
+                      {plant.species}
+                      {plant.scientificName ? ` (${plant.scientificName})` : ""}
+                    </p>
+                  </div>
+                </Link>
+
+                {/* Inline Hydration Gauge */}
+                <div className="sm:w-52 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-stone-700 flex items-center gap-1">
+                      <Droplets className="h-3.5 w-3.5 text-sky-600" />
+                      {hydration.percent}%
+                    </span>
+                    <span className={`text-[11px] font-bold ${hydration.textColorClass}`}>
+                      {hydration.label}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200/80">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${hydration.barColorClass}`}
+                      style={{ width: `${hydration.percent}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => handleQuickWater(plant, e)}
+                    disabled={wateringId === plant.id}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                      isDue
+                        ? "bg-sky-600 text-white hover:bg-sky-700 shadow-sm"
+                        : "bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200/80"
+                    }`}
+                  >
+                    <Droplets className="h-3.5 w-3.5" />
+                    {wateringId === plant.id ? "..." : "Arroser"}
+                  </button>
+                  <Link
+                    href={`/diagnose?plantId=${plant.id}`}
+                    className="flex items-center justify-center rounded-xl border border-botanical-200 bg-botanical-50 p-2 text-botanical-800 hover:bg-botanical-100 transition-colors"
+                    title="Docteur IA"
+                  >
+                    <Stethoscope className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* BENTO GRID VIEW WITH VISUAL WATER RESERVE GAUGE (%) */
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredPlants.map((plant) => {
+            const hydration = getHydrationStatus(
+              plant.lastWateredAt,
+              plant.nextWateringAt,
+              plant.wateringIntervalDays
+            );
+            const isDue =
+              hydration.status === "overdue" || hydration.status === "today";
+
+            return (
+              <div
+                key={plant.id}
+                className="bento-card group flex flex-col overflow-hidden rounded-3xl transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:border-botanical-300"
+              >
+                {/* Card Image Header */}
+                <Link
+                  href={`/plants/${plant.id}`}
+                  className="relative aspect-[16/10] w-full overflow-hidden bg-botanical-100"
                 >
                   {plant.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={plant.imageUrl}
                       alt={plant.nickname}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-5xl">
@@ -881,92 +1217,114 @@ export function DashboardClient({
                     </div>
                   )}
 
+                  {/* Subtle bottom gradient vignette */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
+
+                  {/* Top-left Health Badge */}
                   <div className="absolute left-3 top-3">
                     {renderHealthBadge(plant.healthStatus)}
                   </div>
 
-                  <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                    <MapPin className="h-3 w-3" />
+                  {/* Top-right Location Glass Pill */}
+                  <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
+                    <MapPin className="h-3 w-3 text-emerald-300" />
                     {plant.location}
+                  </div>
+
+                  {/* Bottom-right Cycle Pill */}
+                  <div className="absolute bottom-2.5 right-3 rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold text-stone-800 shadow-sm backdrop-blur-md">
+                    Cycle {plant.wateringIntervalDays}j
                   </div>
                 </Link>
 
-                {/* Card Content */}
+                {/* Card Body */}
                 <div className="flex flex-1 flex-col justify-between p-5">
                   <div>
                     <Link
                       href={`/plants/${plant.id}`}
                       className="flex items-start justify-between gap-2"
                     >
-                      <div>
-                        <h3 className="text-lg font-bold text-stone-900 group-hover:text-botanical-700 transition-colors">
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-extrabold tracking-tight text-stone-900 group-hover:text-botanical-700 transition-colors truncate">
                           {plant.nickname}
                         </h3>
-                        <p className="text-xs font-medium text-stone-500">
+                        <p className="text-xs font-medium text-stone-500 truncate">
                           {plant.species}
                           {plant.scientificName
-                            ? ` (${plant.scientificName})`
+                            ? ` • ${plant.scientificName}`
                             : ""}
                         </p>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-400 group-hover:bg-botanical-50 group-hover:text-botanical-700 transition-colors">
+                        <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
                     </Link>
 
-                    {/* Watering & Light summary */}
-                    <div className="mt-4 space-y-2 rounded-2xl bg-stone-50 p-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-stone-600">
-                          <Clock className="h-3.5 w-3.5 text-sky-600" />
-                          Prochain arrosage :
+                    {/* VISUAL WATER RESERVE GAUGE (%) */}
+                    <div className="mt-4 rounded-2xl border border-stone-200/80 bg-stone-50/80 p-3.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-stone-700 flex items-center gap-1.5">
+                          <Droplets className="h-3.5 w-3.5 text-sky-600" />
+                          Réserve d&apos;eau
                         </span>
                         <span
-                          className={`font-semibold ${
-                            urgency.status === "overdue"
-                              ? "text-red-600"
-                              : urgency.status === "today"
-                              ? "text-sky-700"
-                              : "text-stone-800"
-                          }`}
+                          className={`font-extrabold ${hydration.textColorClass}`}
                         >
-                          {urgency.label}
+                          {hydration.percent}% • {hydration.label}
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-stone-600">
-                          <Sun className="h-3.5 w-3.5 text-amber-500" />
-                          Exposition :
+                      {/* Gauge Track & Fill */}
+                      <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-200/90 p-0.5">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${hydration.barColorClass}`}
+                          style={{ width: `${hydration.percent}%` }}
+                        />
+                      </div>
+
+                      {/* Environment Mini Specs */}
+                      <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-stone-500 border-t border-stone-200/60">
+                        <span className="flex items-center gap-1 truncate">
+                          <Sun className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                          <span className="truncate">
+                            {plant.lightRequirement}
+                          </span>
                         </span>
-                        <span className="max-w-[160px] truncate font-medium text-stone-700">
-                          {plant.lightRequirement}
+                        <span className="flex items-center gap-1 flex-shrink-0">
+                          <CloudRain className="h-3 w-3 text-teal-600" />
+                          <span className="truncate max-w-[90px]">
+                            {plant.humidityRequirement}
+                          </span>
                         </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Card Footer Actions */}
-                  <div className="mt-4 flex items-center gap-2 pt-2">
+                  <div className="mt-4 flex items-center gap-2 pt-1">
                     <button
                       onClick={(e) => handleQuickWater(plant, e)}
                       disabled={wateringId === plant.id}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition-colors ${
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition-all ${
                         isDue
-                          ? "bg-sky-600 text-white hover:bg-sky-700 shadow-sm"
+                          ? "bg-gradient-to-r from-sky-600 to-sky-500 text-white hover:from-sky-700 hover:to-sky-600 shadow-sm"
                           : "bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200/80"
                       }`}
                     >
                       <Droplets className="h-3.5 w-3.5" />
                       {wateringId === plant.id
-                        ? "Enregistrement..."
+                        ? "Arrosage..."
+                        : isDue
+                        ? "Arroser maintenant"
                         : "Arroser"}
                     </button>
 
                     <Link
                       href={`/diagnose?plantId=${plant.id}`}
-                      className="flex items-center justify-center gap-1.5 rounded-xl border border-botanical-200 bg-botanical-50 px-3.5 py-2.5 text-xs font-semibold text-botanical-800 hover:bg-botanical-100 transition-colors"
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-botanical-200 bg-botanical-50 px-3.5 py-2.5 text-xs font-bold text-botanical-800 hover:bg-botanical-100 transition-colors"
                       title="Diagnostiquer l'état de santé par IA"
                     >
-                      <Stethoscope className="h-3.5 w-3.5" />
+                      <HeartPulse className="h-3.5 w-3.5 text-botanical-700" />
                       Docteur IA
                     </Link>
                   </div>

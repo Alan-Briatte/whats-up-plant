@@ -148,3 +148,81 @@ export function getWateringUrgency(nextWateringAt: Date | string): {
     daysDiff: days,
   };
 }
+
+/**
+ * Calcule le niveau de réserve d'eau estimé (%) d'une plante
+ * pour afficher une jauge visuelle sur chaque carte et fiche plante.
+ */
+export function getHydrationStatus(
+  lastWateredAt: Date | string,
+  nextWateringAt: Date | string,
+  wateringIntervalDays: number
+): {
+  percent: number;
+  status: "overdue" | "today" | "soon" | "ok";
+  label: string;
+  barColorClass: string;
+  textColorClass: string;
+} {
+  const urgency = getWateringUrgency(nextWateringAt);
+  const now = Date.now();
+  const last = new Date(lastWateredAt).getTime();
+  const next = new Date(nextWateringAt).getTime();
+  const totalSpan = Math.max(
+    next - last,
+    Math.max(1, wateringIntervalDays) * 24 * 60 * 60 * 1000
+  );
+
+  let rawRatio = (next - now) / totalSpan;
+  if (Number.isNaN(rawRatio)) {
+    rawRatio = 0.5;
+  }
+
+  let percent: number;
+  if (urgency.status === "overdue") {
+    const overdueDays = Math.abs(urgency.daysDiff);
+    percent = Math.max(4, Math.round(14 - overdueDays * 3));
+  } else if (urgency.status === "today") {
+    percent = Math.max(12, Math.min(22, Math.round(rawRatio * 100)));
+  } else {
+    percent = Math.max(20, Math.min(100, Math.round(rawRatio * 100)));
+  }
+
+  if (urgency.status === "overdue") {
+    return {
+      percent,
+      status: "overdue",
+      label: urgency.label,
+      barColorClass: "bg-gradient-to-r from-red-500 via-orange-500 to-amber-500",
+      textColorClass: "text-red-600 dark:text-red-400",
+    };
+  }
+
+  if (urgency.status === "today") {
+    return {
+      percent,
+      status: "today",
+      label: urgency.label,
+      barColorClass: "bg-gradient-to-r from-amber-500 to-sky-500",
+      textColorClass: "text-amber-700 dark:text-amber-300",
+    };
+  }
+
+  if (urgency.status === "soon") {
+    return {
+      percent,
+      status: "soon",
+      label: urgency.label,
+      barColorClass: "bg-gradient-to-r from-sky-500 to-teal-400",
+      textColorClass: "text-sky-700 dark:text-sky-300",
+    };
+  }
+
+  return {
+    percent,
+    status: "ok",
+    label: urgency.label,
+    barColorClass: "bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500",
+    textColorClass: "text-emerald-700 dark:text-emerald-300",
+  };
+}

@@ -14,6 +14,7 @@ import {
   User as UserIcon,
   Moon,
   Sun,
+  Sparkles,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -106,7 +107,7 @@ export function Navbar({ user }: NavbarProps) {
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 shadow-sm hover:bg-stone-50 transition-colors"
+          className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-stone-700 shadow-sm hover:bg-white transition-all"
           title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
         >
           {isDark ? (
@@ -122,19 +123,19 @@ export function Navbar({ user }: NavbarProps) {
   const navItems = [
     {
       href: "/",
-      label: "Mes Plantes",
+      label: "Ma Jungle",
       icon: Home,
       active: pathname === "/",
     },
     {
       href: "/plants/new",
-      label: "Ajouter",
+      label: "Nouvelle Plante",
       icon: PlusCircle,
       active: pathname === "/plants/new",
     },
     {
       href: "/diagnose",
-      label: "Diagnostic IA",
+      label: "Docteur IA",
       icon: Stethoscope,
       active: pathname.startsWith("/diagnose"),
     },
@@ -142,118 +143,121 @@ export function Navbar({ user }: NavbarProps) {
 
   return (
     <>
-      {/* Top Header */}
-      <header className="sticky top-0 z-30 border-b border-botanical-200/70 bg-white/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-botanical-700 text-white shadow-sm transition-transform group-hover:scale-105">
-              <Leaf className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-lg font-bold tracking-tight text-botanical-900">
-                WhatsUpPlant
-              </span>
-              <span className="hidden sm:inline-block ml-2 rounded-full bg-botanical-100 px-2 py-0.5 text-xs font-medium text-botanical-700">
-                PWA & IA
-              </span>
-            </div>
-          </Link>
+      {/* Floating Pill Glass Top Header */}
+      <header className="sticky top-0 z-30 pt-3 px-4">
+        <div className="mx-auto max-w-6xl">
+          <div className="bento-card flex items-center justify-between rounded-2xl px-4 py-2.5">
+            {/* Brand */}
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-botanical-600 to-botanical-800 text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
+                <Leaf className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base sm:text-lg font-extrabold tracking-tight text-stone-900">
+                    WhatsUpPlant
+                  </span>
+                  <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-botanical-100/80 border border-botanical-200/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-botanical-800">
+                    <Sparkles className="h-2.5 w-2.5 text-botanical-600" />
+                    Bento IA
+                  </span>
+                </div>
+                <span className="hidden lg:block text-[11px] font-medium text-stone-500">
+                  Jardin connecté & Carnet de santé
+                </span>
+              </div>
+            </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                    item.active
-                      ? "bg-botanical-700 text-white shadow-sm"
-                      : "text-botanical-800 hover:bg-botanical-100/70"
-                  }`}
+            {/* Desktop Pill Navigation */}
+            <nav className="hidden md:flex items-center gap-1 rounded-xl bg-stone-100/80 p-1 border border-stone-200/60">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-xs font-bold transition-all ${
+                      item.active
+                        ? "bg-botanical-700 text-white shadow-sm"
+                        : "text-stone-700 hover:bg-white hover:text-botanical-800"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Right Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {deferredPrompt && (
+                <button
+                  onClick={handleInstallPwa}
+                  className="flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors"
+                  title="Installer l'application sur votre écran d'accueil"
                 >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Right Actions */}
-          <div className="flex items-center gap-2">
-            {deferredPrompt && (
-              <button
-                onClick={handleInstallPwa}
-                className="flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors"
-                title="Installer l'application sur votre écran d'accueil"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Installer l&apos;App</span>
-              </button>
-            )}
-
-            {notifPermission !== "granted" && (
-              <button
-                onClick={handleEnableNotifications}
-                className="flex items-center gap-1.5 rounded-xl border border-botanical-200 bg-botanical-50 px-3 py-1.5 text-xs font-medium text-botanical-800 hover:bg-botanical-100 transition-colors"
-                title="Activer les rappels d'arrosage"
-              >
-                <Bell className="h-3.5 w-3.5 text-botanical-600" />
-                <span className="hidden sm:inline">Activer rappels</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors"
-              title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
-            >
-              {isDark ? (
-                <Sun className="h-4 w-4 text-amber-400" />
-              ) : (
-                <Moon className="h-4 w-4 text-botanical-800" />
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Installer</span>
+                </button>
               )}
-            </button>
 
-            <div className="hidden sm:flex items-center gap-1.5 rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700">
-              <UserIcon className="h-3.5 w-3.5 text-botanical-700" />
-              <span className="max-w-[110px] truncate">{user.name}</span>
+              {notifPermission !== "granted" && (
+                <button
+                  onClick={handleEnableNotifications}
+                  className="flex items-center gap-1.5 rounded-xl border border-botanical-200 bg-botanical-50 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-botanical-800 hover:bg-botanical-100 transition-colors"
+                  title="Activer les rappels d'arrosage"
+                >
+                  <Bell className="h-3.5 w-3.5 text-botanical-600" />
+                  <span className="hidden xl:inline">Rappels</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200/80 bg-white/90 text-stone-700 hover:bg-stone-100 transition-colors"
+                title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
+              >
+                {isDark ? (
+                  <Sun className="h-4 w-4 text-amber-400" />
+                ) : (
+                  <Moon className="h-4 w-4 text-botanical-800" />
+                )}
+              </button>
+
+              <div className="hidden sm:flex items-center gap-1.5 rounded-xl border border-stone-200/70 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-700">
+                <UserIcon className="h-3.5 w-3.5 text-botanical-700" />
+                <span className="max-w-[100px] truncate">{user.name}</span>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200/80 bg-white/90 text-stone-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                title="Se déconnecter"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
-
-            <button
-              onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200 text-stone-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-              title="Se déconnecter"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation Bar (PWA style) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden items-center justify-around border-t border-botanical-200/80 bg-white/95 backdrop-blur-md py-2 pb-safe shadow-lg">
+      {/* Mobile Floating Glass Dock Navigation Bar */}
+      <nav className="fixed bottom-3 left-3 right-3 z-30 flex md:hidden items-center justify-around rounded-2xl bento-card py-2 px-2 shadow-xl">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-1 rounded-xl px-4 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] font-bold transition-all ${
                 item.active
-                  ? "text-botanical-700 font-semibold"
-                  : "text-stone-500 hover:text-botanical-700"
+                  ? "bg-botanical-700 text-white shadow-sm"
+                  : "text-stone-600 hover:text-botanical-700"
               }`}
             >
-              <div
-                className={`flex h-8 w-12 items-center justify-center rounded-full transition-colors ${
-                  item.active ? "bg-botanical-100 text-botanical-800" : ""
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-              </div>
+              <Icon className="h-4 w-4" />
               <span>{item.label}</span>
             </Link>
           );

@@ -27,9 +27,11 @@ import {
   Loader2,
   RefreshCw,
   Download,
+  Sparkles,
+  LayoutDashboard,
 } from "lucide-react";
 import {
-  getWateringUrgency,
+  getHydrationStatus,
   decodeHtmlEntities,
   deepDecodeHtmlEntities,
 } from "@/lib/utils";
@@ -104,6 +106,9 @@ export default function PlantDetailPage() {
   const [waterNote, setWaterNote] = useState("");
   const [editing, setEditing] = useState(false);
   const [exportingPlant, setExportingPlant] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "health" | "watering">(
+    "overview"
+  );
 
   // Edit form states
   const [editNickname, setEditNickname] = useState("");
@@ -242,7 +247,9 @@ export default function PlantDetailPage() {
     setGeneratingNickname(true);
     try {
       const excludeList = Array.from(
-        new Set([...seenNicknames, editNickname, plant.nickname].filter(Boolean))
+        new Set(
+          [...seenNicknames, editNickname, plant.nickname].filter(Boolean)
+        )
       );
       const res = await fetch("/api/ai/nickname", {
         method: "POST",
@@ -435,7 +442,11 @@ export default function PlantDetailPage() {
     );
   }
 
-  const urgency = getWateringUrgency(plant.nextWateringAt);
+  const hydration = getHydrationStatus(
+    plant.lastWateredAt,
+    plant.nextWateringAt,
+    plant.wateringIntervalDays
+  );
   const totalHealthPhotos = plant.diagnoses.reduce(
     (acc, d) => acc + getDiagnosisPhotos(d).length,
     0
@@ -541,14 +552,14 @@ export default function PlantDetailPage() {
         </div>
       )}
 
-      {/* Top Bar */}
+      {/* Top Navigation & Actions Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 hover:text-botanical-800"
+          className="glass-pill inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold text-stone-700 hover:text-botanical-800 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour à mes plantes
+          Retour à ma jungle
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -556,7 +567,7 @@ export default function PlantDetailPage() {
             type="button"
             onClick={handleExportPlant}
             disabled={exportingPlant}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-200 bg-botanical-50 px-3.5 py-2 text-xs font-semibold text-botanical-800 hover:bg-botanical-100 disabled:opacity-50"
+            className="glass-pill inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-botanical-800 hover:bg-botanical-50 disabled:opacity-50 transition-colors"
             title="Exporter cette plante avec son carnet de santé (.json)"
           >
             {exportingPlant ? (
@@ -564,18 +575,18 @@ export default function PlantDetailPage() {
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            Exporter la fiche
+            Exporter (.json)
           </button>
           <button
             onClick={() => setEditing(!editing)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            className="glass-pill inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition-colors"
           >
             <Edit3 className="h-3.5 w-3.5" />
             Modifier
           </button>
           <button
             onClick={handleDelete}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition-colors"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Supprimer
@@ -583,8 +594,8 @@ export default function PlantDetailPage() {
         </div>
       </div>
 
-      {/* Main Hero Card */}
-      <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
+      {/* BENTO HERO PROFILE CARD */}
+      <div className="bento-card overflow-hidden rounded-3xl">
         <div className="grid md:grid-cols-12">
           {/* Left Image */}
           <div className="relative aspect-[16/11] md:aspect-auto md:col-span-5 bg-botanical-100">
@@ -600,18 +611,39 @@ export default function PlantDetailPage() {
                 🪴
               </div>
             )}
-            <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm">
-              <MapPin className="h-3.5 w-3.5" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
+
+            <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
+              <MapPin className="h-3.5 w-3.5 text-emerald-300" />
               {plant.location}
+            </div>
+
+            <div className="absolute bottom-3 left-4">
+              {plant.healthStatus === "CRITICAL" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100/95 px-3 py-1 text-xs font-bold text-red-800 shadow-sm backdrop-blur-md">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  État critique
+                </span>
+              ) : plant.healthStatus === "WARNING" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100/95 px-3 py-1 text-xs font-bold text-amber-800 shadow-sm backdrop-blur-md">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Attention requise
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/95 px-3 py-1 text-xs font-bold text-emerald-800 shadow-sm backdrop-blur-md">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Plante saine
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Right Info */}
+          {/* Right Info & Live Hydration Gauge */}
           <div className="p-6 sm:p-8 md:col-span-7 flex flex-col justify-between">
             {editing ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-stone-900">
+                  <h2 className="text-lg font-extrabold text-stone-900">
                     Modifier le profil
                   </h2>
                   <button
@@ -625,7 +657,7 @@ export default function PlantDetailPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <label className="block text-xs font-semibold text-stone-700">
+                      <label className="block text-xs font-bold text-stone-700">
                         Surnom
                       </label>
                       <button
@@ -651,7 +683,7 @@ export default function PlantDetailPage() {
                     />
                   </div>
                   <div className="relative">
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    <label className="block text-xs font-bold text-stone-700 mb-1">
                       Pièce / Emplacement
                     </label>
                     <div className="relative">
@@ -682,7 +714,8 @@ export default function PlantDetailPage() {
                         {roomSuggestions
                           .filter((r) =>
                             !editLocation.trim() ||
-                            r.toLowerCase() === editLocation.trim().toLowerCase()
+                            r.toLowerCase() ===
+                              editLocation.trim().toLowerCase()
                               ? true
                               : r
                                   .toLowerCase()
@@ -740,7 +773,7 @@ export default function PlantDetailPage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    <label className="block text-xs font-bold text-stone-700 mb-1">
                       Intervalle d&apos;arrosage (jours)
                     </label>
                     <input
@@ -757,7 +790,7 @@ export default function PlantDetailPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
                     Notes d&apos;entretien
                   </label>
                   <textarea
@@ -785,13 +818,13 @@ export default function PlantDetailPage() {
                 </div>
               </div>
             ) : (
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-stone-900">
+                    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900">
                       {plant.nickname}
                     </h1>
-                    <p className="text-sm font-medium text-stone-600">
+                    <p className="text-sm font-medium text-stone-600 mt-0.5">
                       {plant.species}{" "}
                       {plant.scientificName && (
                         <span className="italic text-stone-400">
@@ -801,214 +834,367 @@ export default function PlantDetailPage() {
                     </p>
                   </div>
 
-                  {plant.healthStatus === "CRITICAL" ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
-                      <AlertTriangle className="h-4 w-4" />
-                      État critique
-                    </span>
-                  ) : plant.healthStatus === "WARNING" ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                      <AlertTriangle className="h-4 w-4" />
-                      Attention requise
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Plante saine
-                    </span>
-                  )}
+                  <Link
+                    href={`/diagnose?plantId=${plant.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-botanical-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-botanical-800 transition-colors"
+                  >
+                    <Stethoscope className="h-3.5 w-3.5" />
+                    Docteur IA
+                  </Link>
                 </div>
 
-                {/* Care Specs Grid */}
-                <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="rounded-2xl bg-sky-50/80 border border-sky-100 p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-800">
-                      <Droplets className="h-4 w-4 text-sky-600" />
-                      Cycle d&apos;arrosage
+                {/* Live Hydration Gauge Bento Box + Quick Water Form */}
+                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/70 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm">
+                        <Droplets className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-extrabold text-stone-900">
+                          Réserve d&apos;eau estimée : {hydration.percent}%
+                        </p>
+                        <p className="text-[11px] text-stone-600">
+                          Prochain arrosage :{" "}
+                          <strong>
+                            {new Date(plant.nextWateringAt).toLocaleDateString(
+                              "fr-FR",
+                              {
+                                day: "numeric",
+                                month: "long",
+                              }
+                            )}
+                          </strong>{" "}
+                          •{" "}
+                          <span
+                            className={`font-bold ${hydration.textColorClass}`}
+                          >
+                            {hydration.label}
+                          </span>
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm font-bold text-stone-900">
-                      Tous les {plant.wateringIntervalDays} jours
-                    </p>
                   </div>
 
-                  <div className="rounded-2xl bg-amber-50/80 border border-amber-100 p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
-                      <Sun className="h-4 w-4 text-amber-500" />
-                      Lumière
-                    </div>
-                    <p className="mt-1 text-xs font-semibold text-stone-800 line-clamp-2">
-                      {plant.lightRequirement}
-                    </p>
+                  {/* Gauge Bar */}
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/90 p-0.5 border border-sky-200/60">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${hydration.barColorClass}`}
+                      style={{ width: `${hydration.percent}%` }}
+                    />
                   </div>
 
-                  <div className="col-span-2 sm:col-span-1 rounded-2xl bg-teal-50/80 border border-teal-100 p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-800">
-                      <CloudRain className="h-4 w-4 text-teal-600" />
-                      Humidité
-                    </div>
-                    <p className="mt-1 text-xs font-semibold text-stone-800 line-clamp-2">
-                      {plant.humidityRequirement}
-                    </p>
-                  </div>
+                  {/* Inline Quick Watering Form */}
+                  <form
+                    onSubmit={handleWater}
+                    className="flex flex-col sm:flex-row gap-2 pt-1"
+                  >
+                    <input
+                      type="text"
+                      value={waterNote}
+                      onChange={(e) => setWaterNote(e.target.value)}
+                      placeholder="Note d'arrosage (optionnel, ex: + engrais)..."
+                      className="flex-1 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs focus:border-sky-600 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={watering}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Droplets className="h-3.5 w-3.5" />
+                      {watering ? "Enregistrement..." : "Arroser maintenant"}
+                    </button>
+                  </form>
                 </div>
-
-                {plant.careNotes && (
-                  <div className="mt-4 rounded-2xl border border-botanical-200/70 bg-botanical-50/50 p-3.5 text-xs text-stone-700">
-                    <span className="font-semibold text-botanical-900 flex items-center gap-1.5 mb-1">
-                      <FileText className="h-3.5 w-3.5 text-botanical-700" />
-                      Conseils d&apos;entretien :
-                    </span>
-                    {plant.careNotes}
-                  </div>
-                )}
               </div>
             )}
-
-            {/* Quick AI Diagnosis CTA */}
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
-              <div className="text-xs text-stone-500">
-                Une feuille jaune, des taches ou un doute sur sa santé ?
-              </div>
-              <Link
-                href={`/diagnose?plantId=${plant.id}`}
-                className="inline-flex items-center gap-2 rounded-xl bg-botanical-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-botanical-800 transition-colors"
-              >
-                <Stethoscope className="h-4 w-4" />
-                Lancer un diagnostic IA pour {plant.nickname}
-              </Link>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom 2 Columns: Watering Tracker & Health Diagnoses */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        {/* Watering Tracker (5 cols) */}
-        <div className="lg:col-span-5 rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-5 h-fit">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-                <Droplets className="h-5 w-5" />
+      {/* GLASS TABS NAVIGATION (Option 1 UX) */}
+      <div className="bento-card rounded-2xl p-1.5 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+            activeTab === "overview"
+              ? "bg-botanical-700 text-white shadow-sm"
+              : "text-stone-600 hover:bg-stone-100/80 hover:text-stone-900"
+          }`}
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          Vue d&apos;ensemble
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("health")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+            activeTab === "health"
+              ? "bg-botanical-700 text-white shadow-sm"
+              : "text-stone-600 hover:bg-stone-100/80 hover:text-stone-900"
+          }`}
+        >
+          <Stethoscope className="h-4 w-4" />
+          Carnet de Santé IA
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${
+              activeTab === "health"
+                ? "bg-white/20 text-white"
+                : "bg-botanical-100 text-botanical-800"
+            }`}
+          >
+            {plant.diagnoses.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("watering")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+            activeTab === "watering"
+              ? "bg-botanical-700 text-white shadow-sm"
+              : "text-stone-600 hover:bg-stone-100/80 hover:text-stone-900"
+          }`}
+        >
+          <History className="h-4 w-4" />
+          Historique d&apos;arrosage
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${
+              activeTab === "watering"
+                ? "bg-white/20 text-white"
+                : "bg-sky-100 text-sky-800"
+            }`}
+          >
+            {plant.wateringLogs.length}
+          </span>
+        </button>
+      </div>
+
+      {/* TAB 1: OVERVIEW & CARE SPECS BENTO */}
+      {activeTab === "overview" && (
+        <div className="space-y-5">
+          {/* 3 Care Specs Bento Cards */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="bento-card rounded-3xl p-5">
+              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-sky-800">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                  <Droplets className="h-4 w-4" />
+                </div>
+                Cycle d&apos;arrosage
               </div>
-              <div>
-                <h2 className="text-base font-bold text-stone-900">
-                  Suivi & Rappel d&apos;arrosage
-                </h2>
-                <p className="text-xs text-stone-500">
-                  Prochaine échéance :{" "}
-                  <strong>
-                    {new Date(plant.nextWateringAt).toLocaleDateString("fr-FR", {
-                      day: "numeric",
-                      month: "long",
-                    })}
-                  </strong>{" "}
-                  ({urgency.label})
-                </p>
+              <p className="mt-3 text-xl font-extrabold text-stone-900">
+                Tous les {plant.wateringIntervalDays} jours
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                Dernier arrosage :{" "}
+                {new Date(plant.lastWateredAt).toLocaleDateString("fr-FR", {
+                  day: "numeric",
+                  month: "short",
+                })}
+              </p>
+            </div>
+
+            <div className="bento-card rounded-3xl p-5">
+              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-amber-800">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                  <Sun className="h-4 w-4" />
+                </div>
+                Exposition lumineuse
               </div>
+              <p className="mt-3 text-base font-extrabold text-stone-900">
+                {plant.lightRequirement}
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                Emplacement actuel : {plant.location}
+              </p>
+            </div>
+
+            <div className="bento-card rounded-3xl p-5">
+              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-teal-800">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
+                  <CloudRain className="h-4 w-4" />
+                </div>
+                Humidité idéale
+              </div>
+              <p className="mt-3 text-base font-extrabold text-stone-900">
+                {plant.humidityRequirement}
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                Vaporisation selon sécheresse de l&apos;air
+              </p>
             </div>
           </div>
 
-          <form
-            onSubmit={handleWater}
-            className="flex flex-col sm:flex-row gap-2 rounded-2xl bg-sky-50/70 border border-sky-200/80 p-3"
-          >
-            <input
-              type="text"
-              value={waterNote}
-              onChange={(e) => setWaterNote(e.target.value)}
-              placeholder="Note optionnelle (ex: + engrais liquide)..."
-              className="flex-1 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs focus:border-sky-600 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={watering}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
-            >
-              <Droplets className="h-4 w-4" />
-              {watering ? "Enregistrement..." : "Arroser"}
-            </button>
-          </form>
+          {/* Care Notes Bento Card */}
+          <div className="bento-card rounded-3xl p-6">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="flex items-center gap-2 text-sm font-extrabold text-stone-900">
+                <FileText className="h-4 w-4 text-botanical-700" />
+                Conseils d&apos;entretien personnalisés
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="text-xs font-bold text-botanical-700 hover:underline"
+              >
+                Modifier les notes
+              </button>
+            </div>
+            <p className="text-sm text-stone-700 leading-relaxed">
+              {plant.careNotes ||
+                "Aucune note d'entretien spécifique enregistrée pour le moment."}
+            </p>
+          </div>
 
-          <div>
-            <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-500">
-              <History className="h-3.5 w-3.5" />
-              Historique des arrosages ({plant.wateringLogs.length})
-            </h3>
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {plant.wateringLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-stone-100 bg-stone-50 px-3.5 py-2.5 text-xs"
-                >
-                  <span className="font-medium text-stone-800 truncate">
-                    {log.notes || "Arrosage régulier"}
+          {/* Summary Row: Latest Health Check & Latest Watering Logs */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Quick Health Card */}
+            <div className="bento-card rounded-3xl p-5 flex flex-col justify-between gap-4">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
+                    Dernier bilan de santé
                   </span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="flex items-center gap-1 text-stone-500">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(log.wateredAt).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={deletingLogId === log.id}
-                      onClick={() => handleDeleteWateringLog(log.id)}
-                      className="flex h-6 w-6 items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
-                      title="Supprimer cet arrosage (recalcule la prochaine échéance)"
-                    >
-                      {deletingLogId === log.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("health")}
+                    className="text-xs font-bold text-botanical-700 hover:underline"
+                  >
+                    Ouvrir le carnet ({plant.diagnoses.length}) →
+                  </button>
                 </div>
-              ))}
+
+                {plant.diagnoses.length === 0 ? (
+                  <p className="mt-3 text-xs text-stone-600">
+                    Aucun diagnostic enregistré. Utilisez le Docteur IA pour
+                    analyser votre plante avec sa photo principale ou de
+                    nouvelles photos.
+                  </p>
+                ) : (
+                  <div className="mt-3 rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3.5">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-bold text-stone-800">
+                        Diagnostic du{" "}
+                        {new Date(
+                          plant.diagnoses[0].createdAt
+                        ).toLocaleDateString("fr-FR")}
+                      </span>
+                      <span className="font-semibold text-botanical-700">
+                        Fiabilité {plant.diagnoses[0].confidence}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-600 line-clamp-2">
+                      {decodeHtmlEntities(plant.diagnoses[0].summary)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <Link
+                href={`/diagnose?plantId=${plant.id}`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-botanical-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-botanical-800 transition-colors"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Lancer un diagnostic IA pour {plant.nickname}
+              </Link>
+            </div>
+
+            {/* Quick Watering History Card */}
+            <div className="bento-card rounded-3xl p-5 flex flex-col justify-between gap-4">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
+                    Derniers arrosages
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("watering")}
+                    className="text-xs font-bold text-sky-700 hover:underline"
+                  >
+                    Voir tout ({plant.wateringLogs.length}) →
+                  </button>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {plant.wateringLogs.slice(0, 3).map((log) => (
+                    <div
+                      key={log.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-stone-200/70 bg-stone-50/70 px-3 py-2 text-xs"
+                    >
+                      <span className="font-medium text-stone-800 truncate">
+                        {log.notes || "Arrosage régulier"}
+                      </span>
+                      <span className="text-stone-500 flex-shrink-0">
+                        {new Date(log.wateredAt).toLocaleDateString("fr-FR", {
+                          day: "2-digit",
+                          month: "short",
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("watering")}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs font-bold text-sky-800 hover:bg-sky-100 transition-colors"
+              >
+                <History className="h-3.5 w-3.5" />
+                Gérer l&apos;historique des arrosages
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* AI Diagnoses History & Photo Stock (7 cols) */}
-        <div className="lg:col-span-7 rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
+      {/* TAB 2: CARNET DE SANTÉ IA & PHOTO GALLERY */}
+      {activeTab === "health" && (
+        <div className="bento-card rounded-3xl p-6 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-botanical-100 text-botanical-700">
                 <Stethoscope className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-stone-900">
+                <h2 className="text-base font-extrabold text-stone-900">
                   Carnet de Santé & Galerie Photos ({plant.diagnoses.length})
                 </h2>
                 <p className="text-xs text-stone-500">
-                  {totalHealthPhotos} photo{totalHealthPhotos > 1 ? "s" : ""} en
-                  stock • Suivi de l&apos;évolution et des soins
+                  {totalHealthPhotos} photo{totalHealthPhotos > 1 ? "s" : ""}{" "}
+                  archivée{totalHealthPhotos > 1 ? "s" : ""} • Marquez les
+                  soucis comme guéris au fil des soins
                 </p>
               </div>
             </div>
 
             <Link
               href={`/diagnose?plantId=${plant.id}`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-botanical-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-botanical-800 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-botanical-700 px-4 py-2 text-xs font-bold text-white hover:bg-botanical-800 transition-colors shadow-sm"
             >
-              <Camera className="h-3.5 w-3.5" />
-              + Nouveau diagnostic photo
+              <Camera className="h-3.5 w-3.5" />+ Nouveau diagnostic IA
             </Link>
           </div>
 
           {plant.diagnoses.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-stone-200 p-8 text-center">
-              <Images className="mx-auto mb-2 h-8 w-8 text-stone-400" />
-              <p className="text-sm font-medium text-stone-700">
+            <div className="rounded-2xl border border-dashed border-stone-200 p-10 text-center">
+              <Images className="mx-auto mb-2 h-9 w-9 text-stone-400" />
+              <p className="text-sm font-bold text-stone-800">
                 Aucun diagnostic ni photo de santé pour cette plante
               </p>
-              <p className="mt-1 text-xs text-stone-500">
-                Prenez des photos des feuilles ou des tiges pour diagnostiquer
-                un problème et conserver l&apos;historique visuel dans ce carnet.
+              <p className="mt-1 text-xs text-stone-500 max-w-md mx-auto">
+                Analysez la photo principale ou prenez en photo les feuilles
+                pour obtenir un diagnostic complet par IA et suivre la guérison.
               </p>
+              <Link
+                href={`/diagnose?plantId=${plant.id}`}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-botanical-700 px-4 py-2 text-xs font-bold text-white hover:bg-botanical-800 transition-colors"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Lancer un premier diagnostic
+              </Link>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1046,7 +1232,7 @@ export default function PlantDetailPage() {
                 return (
                   <div
                     key={diag.id}
-                    className={`rounded-2xl border p-4 space-y-3 transition-colors ${
+                    className={`rounded-2xl border p-4 sm:p-5 space-y-3.5 transition-colors ${
                       diagResolved
                         ? "border-emerald-200 bg-emerald-50/40"
                         : "border-stone-200 bg-stone-50/70"
@@ -1056,7 +1242,7 @@ export default function PlantDetailPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
                             diagResolved
                               ? "bg-stone-200 text-stone-600 line-through"
                               : diag.status === "CRITICAL"
@@ -1097,7 +1283,7 @@ export default function PlantDetailPage() {
                                 !diagResolved
                               )
                             }
-                            className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-bold transition-colors disabled:opacity-50 ${
                               diagResolved
                                 ? "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
                                 : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
@@ -1117,7 +1303,7 @@ export default function PlantDetailPage() {
                           type="button"
                           disabled={uploadingDiagId === diag.id}
                           onClick={() => triggerAddPhotosToDiagnosis(diag.id)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-300 bg-white px-2.5 py-1 text-xs font-semibold text-botanical-800 hover:bg-botanical-50 disabled:opacity-50 transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-300 bg-white px-2.5 py-1 text-xs font-bold text-botanical-800 hover:bg-botanical-50 disabled:opacity-50 transition-colors"
                         >
                           {uploadingDiagId === diag.id ? (
                             <>
@@ -1194,7 +1380,8 @@ export default function PlantDetailPage() {
                     {issues.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                          Soucis détectés ({issues.filter((i) => i.resolved).length}/
+                          Soucis détectés (
+                          {issues.filter((i) => i.resolved).length}/
                           {issues.length} résolu{issues.length > 1 ? "s" : ""})
                         </p>
                         <div className="space-y-2">
@@ -1249,14 +1436,16 @@ export default function PlantDetailPage() {
                                       !isResolved
                                     )
                                   }
-                                  className={`inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                                  className={`inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50 ${
                                     isResolved
                                       ? "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
                                       : "border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50"
                                   }`}
                                 >
                                   <Check className="h-3 w-3" />
-                                  {isResolved ? "Non guéri" : "Résoudre ce souci"}
+                                  {isResolved
+                                    ? "Non guéri"
+                                    : "Résoudre ce souci"}
                                 </button>
                               </div>
                             );
@@ -1266,7 +1455,7 @@ export default function PlantDetailPage() {
                     )}
 
                     {treatments.length > 0 && !diagResolved && (
-                      <div className="text-xs text-botanical-900 bg-botanical-50/90 rounded-xl p-2.5 border border-botanical-200/60 space-y-1">
+                      <div className="text-xs text-botanical-900 bg-botanical-50/90 rounded-xl p-3 border border-botanical-200/60 space-y-1">
                         <strong className="block">Plan de soin :</strong>
                         {treatments.map((t) => (
                           <div key={t.step}>
@@ -1282,7 +1471,97 @@ export default function PlantDetailPage() {
             </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* TAB 3: WATERING TRACKER & FULL HISTORY */}
+      {activeTab === "watering" && (
+        <div className="bento-card rounded-3xl p-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                <Droplets className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-stone-900">
+                  Journal d&apos;arrosage ({plant.wateringLogs.length})
+                </h2>
+                <p className="text-xs text-stone-500">
+                  Cycle tous les {plant.wateringIntervalDays} jours • Supprimez
+                  une entrée en cas de clic par erreur
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleWater}
+            className="flex flex-col sm:flex-row gap-2 rounded-2xl bg-sky-50/70 border border-sky-200/80 p-3.5"
+          >
+            <input
+              type="text"
+              value={waterNote}
+              onChange={(e) => setWaterNote(e.target.value)}
+              placeholder="Ajouter un arrosage avec note (ex: + engrais liquide, bassinage)..."
+              className="flex-1 rounded-xl border border-sky-200 bg-white px-3.5 py-2 text-xs focus:border-sky-600 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={watering}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+            >
+              <Droplets className="h-4 w-4" />
+              {watering ? "Enregistrement..." : "Enregistrer l'arrosage"}
+            </button>
+          </form>
+
+          <div className="space-y-2">
+            {plant.wateringLogs.length === 0 ? (
+              <p className="py-8 text-center text-xs text-stone-500">
+                Aucun arrosage enregistré pour le moment.
+              </p>
+            ) : (
+              plant.wateringLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between gap-2 rounded-2xl border border-stone-200/70 bg-stone-50/80 px-4 py-3 text-xs"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                      <Droplets className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="font-semibold text-stone-800 truncate">
+                      {log.notes || "Arrosage régulier"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="flex items-center gap-1 text-stone-500 font-medium">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {new Date(log.wateredAt).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={deletingLogId === log.id}
+                      onClick={() => handleDeleteWateringLog(log.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
+                      title="Supprimer cet arrosage (recalcule la prochaine échéance)"
+                    >
+                      {deletingLogId === log.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

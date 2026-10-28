@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 24, 43, 33;
-  --background-rgb: 245, 250, 247;
+  --foreground-rgb: 19, 36, 27;
+  --background-rgb: 243, 248, 245;
   color-scheme: light;
 }
 
 html.dark {
   --foreground-rgb: 232, 242, 236;
-  --background-rgb: 11, 20, 15;
+  --background-rgb: 10, 18, 14;
   color-scheme: dark;
 }
 
@@ -18,6 +18,11 @@ html,
 body {
   color: rgb(var(--foreground-rgb));
   background-color: rgb(var(--background-rgb));
+  background-image:
+    radial-gradient(at 0% 0%, rgba(69, 139, 100, 0.11) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 45%),
+    radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 55%);
+  background-attachment: fixed;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-tap-highlight-color: transparent;
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -27,41 +32,79 @@ body {
 html.dark,
 html.dark body,
 html.dark .bg-\[\#f5faf7\] {
-  background-color: #0b140f !important;
+  background-color: #0a120e !important;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(42, 89, 64, 0.22) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(14, 116, 144, 0.14) 0px, transparent 45%),
+    radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 55%) !important;
   color: #e8f2ec !important;
+}
+
+/* Bento & Glass utility surfaces */
+.bento-card {
+  background-color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 228, 218, 0.85);
+  box-shadow: 0 8px 28px -6px rgba(24, 58, 39, 0.06), 0 2px 6px -1px rgba(24, 58, 39, 0.03);
+}
+
+html.dark .bento-card {
+  background-color: rgba(18, 32, 24, 0.86) !important;
+  border-color: rgba(45, 83, 62, 0.65) !important;
+  box-shadow: 0 10px 30px -6px rgba(0, 0, 0, 0.45) !important;
+}
+
+.glass-pill {
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(210, 228, 216, 0.85);
+}
+
+html.dark .glass-pill {
+  background-color: rgba(16, 29, 22, 0.88) !important;
+  border-color: rgba(45, 83, 62, 0.7) !important;
 }
 
 /* Surfaces & Cards */
 html.dark .bg-white {
-  background-color: #132119 !important;
+  background-color: #122018 !important;
 }
+html.dark .bg-white\/90,
 html.dark .bg-white\/85,
-html.dark .bg-white\/95 {
-  background-color: rgba(16, 29, 22, 0.92) !important;
+html.dark .bg-white\/95,
+html.dark .bg-white\/80 {
+  background-color: rgba(16, 29, 22, 0.9) !important;
 }
 html.dark .bg-stone-50,
-html.dark .bg-stone-50\/70 {
-  background-color: #182920 !important;
+html.dark .bg-stone-50\/70,
+html.dark .bg-stone-50\/80 {
+  background-color: #17281f !important;
 }
-html.dark .bg-stone-100 {
-  background-color: #1f3529 !important;
+html.dark .bg-stone-100,
+html.dark .bg-stone-100\/80 {
+  background-color: #1e3327 !important;
 }
 html.dark .bg-stone-200 {
   background-color: #294435 !important;
 }
 
 /* Hero Banners in Dark Mode */
-html.dark .from-botanical-800 {
-  --tw-gradient-from: #13281d var(--tw-gradient-from-position) !important;
-  --tw-gradient-to: rgba(19, 40, 29, 0) var(--tw-gradient-to-position) !important;
+html.dark .from-botanical-800,
+html.dark .from-botanical-900 {
+  --tw-gradient-from: #12271c var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(18, 39, 28, 0) var(--tw-gradient-to-position) !important;
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
-html.dark .via-botanical-700 {
-  --tw-gradient-stops: var(--tw-gradient-from), #183526 var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+html.dark .via-botanical-700,
+html.dark .via-botanical-800 {
+  --tw-gradient-stops: var(--tw-gradient-from), #173325 var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
 }
 html.dark .to-emerald-800,
-html.dark .to-teal-800 {
-  --tw-gradient-to: #0f2920 var(--tw-gradient-to-position) !important;
+html.dark .to-teal-800,
+html.dark .to-emerald-900 {
+  --tw-gradient-to: #0e271e var(--tw-gradient-to-position) !important;
 }
 
 /* Botanical & Colored Tinted Surfaces */
@@ -72,50 +115,57 @@ html.dark .bg-botanical-50\/60,
 html.dark .bg-botanical-50\/70,
 html.dark .bg-botanical-50\/80,
 html.dark .bg-botanical-50\/90 {
-  background-color: #182c21 !important;
+  background-color: #172b20 !important;
 }
 html.dark .bg-botanical-100,
+html.dark .bg-botanical-100\/70,
 html.dark .bg-botanical-100\/80 {
   background-color: #1f3a2b !important;
 }
 html.dark .bg-sky-50,
+html.dark .bg-sky-50\/60,
 html.dark .bg-sky-50\/70,
 html.dark .bg-sky-50\/80 {
-  background-color: #112631 !important;
+  background-color: #10242f !important;
 }
-html.dark .bg-sky-100 {
-  background-color: #163242 !important;
+html.dark .bg-sky-100,
+html.dark .bg-sky-100\/80 {
+  background-color: #153140 !important;
 }
 html.dark .from-sky-50 {
-  --tw-gradient-from: #112530 var(--tw-gradient-from-position) !important;
-  --tw-gradient-via: #132119 !important;
-  --tw-gradient-to: #112530 var(--tw-gradient-to-position) !important;
-  --tw-gradient-stops: #112530, #132119, #112530 !important;
+  --tw-gradient-from: #10242f var(--tw-gradient-from-position) !important;
+  --tw-gradient-via: #122018 !important;
+  --tw-gradient-to: #10242f var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: #10242f, #122018, #10242f !important;
 }
 html.dark .bg-amber-50,
 html.dark .bg-amber-50\/40,
+html.dark .bg-amber-50\/70,
 html.dark .bg-amber-50\/80,
 html.dark .bg-amber-50\/90 {
-  background-color: #292012 !important;
+  background-color: #271e11 !important;
 }
 html.dark .bg-amber-100,
 html.dark .bg-amber-100\/95 {
   background-color: rgba(120, 53, 15, 0.85) !important;
 }
+html.dark .bg-teal-50,
 html.dark .bg-teal-50\/80 {
-  background-color: #122927 !important;
+  background-color: #112826 !important;
 }
 html.dark .bg-emerald-50,
 html.dark .bg-emerald-50\/40,
-html.dark .bg-emerald-50\/50 {
-  background-color: #132a20 !important;
+html.dark .bg-emerald-50\/50,
+html.dark .bg-emerald-50\/70 {
+  background-color: #12291f !important;
 }
 html.dark .bg-emerald-100,
 html.dark .bg-emerald-100\/95 {
   background-color: rgba(6, 78, 59, 0.85) !important;
 }
-html.dark .bg-red-50 {
-  background-color: #2c1618 !important;
+html.dark .bg-red-50,
+html.dark .bg-red-50\/70 {
+  background-color: #2b1517 !important;
 }
 html.dark .bg-red-100,
 html.dark .bg-red-100\/95 {
@@ -129,8 +179,9 @@ html.dark .hover\:bg-botanical-100\/70:hover {
   background-color: #234231 !important;
 }
 html.dark .hover\:bg-stone-50:hover,
+html.dark .hover\:bg-stone-100:hover,
 html.dark .hover\:bg-stone-200\/60:hover {
-  background-color: #21382b !important;
+  background-color: #20372a !important;
 }
 html.dark .hover\:bg-sky-100:hover {
   background-color: #1a3a4c !important;
@@ -149,19 +200,21 @@ html.dark .hover\:bg-emerald-100:hover {
 
 /* Borders */
 html.dark .border-stone-100 {
-  border-color: #1f3328 !important;
+  border-color: #1d3126 !important;
 }
 html.dark .border-stone-200,
+html.dark .border-stone-200\/60,
 html.dark .border-stone-200\/80,
 html.dark .border-stone-200\/90 {
-  border-color: #263f31 !important;
+  border-color: #253d30 !important;
 }
+html.dark .border-botanical-100,
 html.dark .border-botanical-200,
 html.dark .border-botanical-200\/60,
 html.dark .border-botanical-200\/70,
 html.dark .border-botanical-200\/80,
 html.dark .border-botanical-300 {
-  border-color: #2d533e !important;
+  border-color: #2c513d !important;
 }
 html.dark .border-sky-100,
 html.dark .border-sky-200,
@@ -174,7 +227,8 @@ html.dark .border-amber-200\/60,
 html.dark .border-amber-200\/80 {
   border-color: rgba(251, 191, 36, 0.28) !important;
 }
-html.dark .border-teal-100 {
+html.dark .border-teal-100,
+html.dark .border-teal-200 {
   border-color: rgba(45, 212, 191, 0.28) !important;
 }
 html.dark .border-emerald-200,
@@ -220,7 +274,8 @@ html.dark .text-amber-800,
 html.dark .text-amber-700 {
   color: #fcd34d !important;
 }
-html.dark .text-teal-800 {
+html.dark .text-teal-800,
+html.dark .text-teal-700 {
   color: #5eead4 !important;
 }
 html.dark .text-emerald-950,
@@ -238,7 +293,7 @@ html.dark .text-red-800 {
 html.dark input:not([type="checkbox"]),
 html.dark select,
 html.dark textarea {
-  background-color: #182a20 !important;
+  background-color: #17291f !important;
   border-color: #2b4738 !important;
   color: #eef6f1 !important;
 }
@@ -256,5 +311,12 @@ html.dark textarea:focus {
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

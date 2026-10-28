@@ -139,23 +139,24 @@ function DiagnoseContent() {
       <div className="flex items-center justify-between">
         <Link
           href={selectedPlantId ? `/plants/${selectedPlantId}` : "/"}
-          className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 hover:text-botanical-800"
+          className="glass-pill inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold text-stone-700 hover:text-botanical-800 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           {selectedPlantId
             ? "Retour au profil de la plante"
-            : "Retour au tableau de bord"}
+            : "Retour à ma jungle"}
         </Link>
       </div>
 
       {/* Header Banner */}
-      <div className="rounded-3xl bg-gradient-to-r from-botanical-800 via-botanical-700 to-teal-800 p-6 sm:p-8 text-white shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-botanical-800 via-botanical-700 to-teal-800 p-6 sm:p-8 text-white shadow-lg">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-400/15 blur-2xl" />
+        <div className="relative z-10 flex items-start gap-4">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md">
             <Stethoscope className="h-6 w-6 text-emerald-200" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-2xl font-extrabold tracking-tight">
               Docteur Plante IA — Diagnostic & Carnet Photo 🩺
             </h1>
             <p className="mt-1 text-sm text-botanical-100">
@@ -170,7 +171,7 @@ function DiagnoseContent() {
       {/* Form Card */}
       <form
         onSubmit={handleAnalyze}
-        className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-8 shadow-sm space-y-6"
+        className="bento-card rounded-3xl p-6 sm:p-8 space-y-6"
       >
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

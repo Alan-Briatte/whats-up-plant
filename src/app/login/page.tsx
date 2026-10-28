@@ -38,7 +38,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto mt-6 max-w-md">
-      <div className="overflow-hidden rounded-3xl border border-botanical-200 bg-white p-8 shadow-sm">
+      <div className="bento-card overflow-hidden rounded-3xl p-8">
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-botanical-700 text-white shadow-md">
             <Leaf className="h-7 w-7" />
