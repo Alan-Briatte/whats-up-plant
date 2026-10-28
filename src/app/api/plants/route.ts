@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { deepDecodeHtmlEntities } from "@/lib/utils";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -23,7 +24,7 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ plants });
+  return NextResponse.json({ plants: deepDecodeHtmlEntities(plants) });
 }
 
 export async function POST(req: Request) {
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
+    const body = deepDecodeHtmlEntities(await req.json());
     const nickname = (body.nickname || "").trim();
     const species = (body.species || "").trim();
     const scientificName = body.scientificName
@@ -90,7 +91,10 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ plant }, { status: 201 });
+    return NextResponse.json(
+      { plant: deepDecodeHtmlEntities(plant) },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Create plant error:", error);
     return NextResponse.json(

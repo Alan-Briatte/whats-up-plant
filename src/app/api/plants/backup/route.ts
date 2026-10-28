@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { deepDecodeHtmlEntities } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +122,7 @@ export async function GET(req: Request) {
     })),
   };
 
-  return NextResponse.json(payload);
+  return NextResponse.json(deepDecodeHtmlEntities(payload));
 }
 
 export async function POST(req: Request) {
@@ -131,7 +132,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
+    const body = deepDecodeHtmlEntities(await req.json());
     const rawPlants: unknown[] = Array.isArray(body)
       ? body
       : Array.isArray(body?.plants)

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { MultiImagePicker } from "@/components/MultiImagePicker";
 import { PlantDiagnosisResult } from "@/lib/gemini";
+import { deepDecodeHtmlEntities } from "@/lib/utils";
 
 const SYMPTOM_CHIPS = [
   "Feuilles inférieures qui jaunissent",
@@ -122,7 +123,7 @@ function DiagnoseContent() {
         setLoading(false);
         return;
       }
-      setResult(data.diagnosis);
+      setResult(deepDecodeHtmlEntities(data.diagnosis));
     } catch {
       setError("Impossible de contacter le service de diagnostic IA.");
     } finally {

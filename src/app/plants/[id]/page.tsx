@@ -28,7 +28,11 @@ import {
   RefreshCw,
   Download,
 } from "lucide-react";
-import { getWateringUrgency } from "@/lib/utils";
+import {
+  getWateringUrgency,
+  decodeHtmlEntities,
+  deepDecodeHtmlEntities,
+} from "@/lib/utils";
 import { DiagnosisIssue, DiagnosisTreatmentStep } from "@/lib/gemini";
 import { compressImageFile } from "@/components/MultiImagePicker";
 
@@ -817,8 +821,10 @@ export default function PlantDetailPage() {
                 );
 
                 try {
-                  issues = JSON.parse(diag.issuesJson);
-                  const parsedT = JSON.parse(diag.treatmentJson);
+                  issues = deepDecodeHtmlEntities(JSON.parse(diag.issuesJson));
+                  const parsedT = deepDecodeHtmlEntities(
+                    JSON.parse(diag.treatmentJson)
+                  );
                   treatments = parsedT.treatments || [];
                 } catch {
                   // ignore
@@ -913,7 +919,7 @@ export default function PlantDetailPage() {
 
                     {/* Diagnosis text */}
                     <p className="text-xs text-stone-700 leading-relaxed">
-                      {diag.summary}
+                      {decodeHtmlEntities(diag.summary)}
                     </p>
 
                     {issues.length > 0 && (

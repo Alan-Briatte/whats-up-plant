@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
+import { decodeHtmlEntities, deepDecodeHtmlEntities } from "@/lib/utils";
 
 const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
@@ -361,7 +362,8 @@ export async function identifyPlantFromImage(
             {
               text: `Tu es un expert botaniste. Identifie cette plante d'intérieur à partir de la photo${
                 hintName ? ` (indice utilisateur: "${hintName}")` : ""
-              } et retourne en français ses paramètres de soin idéaux au format JSON.`,
+              } et retourne en français ses paramètres de soin idéaux au format JSON.
+IMPORTANT : Écris tous les textes directement en UTF-8 avec les vrais caractères accentués français (é, è, ê, à, ç, œ, etc.). N'utilise JAMAIS d'entités HTML comme &eacute; ou &egrave;.`,
             },
           ],
         },
@@ -420,7 +422,9 @@ export async function identifyPlantFromImage(
     });
 
     const text = response.text || "{}";
-    const result = JSON.parse(text) as PlantIdentificationResult;
+    const result = deepDecodeHtmlEntities(
+      JSON.parse(text) as PlantIdentificationResult
+    );
     return {
       ...result,
       wateringIntervalDays: Math.max(
@@ -482,7 +486,8 @@ export async function diagnosePlantHealth(
                   ? ` (Observations de l'utilisateur : "${userSymptoms}")`
                   : ""
               }.
-Diagnostique l'état de santé de la plante, détecte toute maladie, carence, parasite ou erreur d'arrosage/exposition, et propose un plan de soin concret étape par étape en français.`,
+Diagnostique l'état de santé de la plante, détecte toute maladie, carence, parasite ou erreur d'arrosage/exposition, et propose un plan de soin concret étape par étape en français.
+IMPORTANT : Écris tous les textes directement en UTF-8 avec les vrais caractères accentués français (é, è, ê, à, ç, œ, etc.). N'utilise JAMAIS d'entités HTML comme &eacute;, &egrave; ou &#39;.`,
             },
           ],
         },
@@ -557,7 +562,9 @@ Diagnostique l'état de santé de la plante, détecte toute maladie, carence, pa
     });
 
     const text = response.text || "{}";
-    const parsedResult = JSON.parse(text) as PlantDiagnosisResult;
+    const parsedResult = deepDecodeHtmlEntities(
+      JSON.parse(text) as PlantDiagnosisResult
+    );
     const normalizedStatus = ["HEALTHY", "WARNING", "CRITICAL"].includes(
       parsedResult.status
     )
@@ -719,7 +726,7 @@ const GENERAL_PLANT_NICKNAMES = [
   "Pousse-Pousse",
   "Groot",
   "Bébé Groot",
-  "ivy",
+  "Ivy",
   "Bambou",
   "Kiwi",
   "Matcha",
@@ -731,7 +738,7 @@ const GENERAL_PLANT_NICKNAMES = [
   "Yoda",
   "Émeraude",
   "Gaïa",
-  " Botanix",
+  "Botanix",
   "Pépin",
   "Olivette",
   "Ciboulette",
@@ -769,7 +776,8 @@ export async function generatePlantNicknames(options: {
                 ", "
               )}.`
             : ""
-        }`,
+        }
+IMPORTANT : Écris tous les textes directement en UTF-8 avec les vrais caractères accentués français (é, è, ê, à, ç, œ, etc.). N'utilise JAMAIS d'entités HTML comme &eacute; ou &egrave;.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -788,7 +796,7 @@ export async function generatePlantNicknames(options: {
         suggestions?: string[];
       };
       const clean = (parsed.suggestions || [])
-        .map((s) => s.trim())
+        .map((s) => decodeHtmlEntities(s).trim())
         .filter((s) => s && !excludeLower.has(s.toLowerCase()));
       if (clean.length > 0) {
         return {
@@ -841,4 +849,3 @@ export async function generatePlantNicknames(options: {
     suggestions: picked,
   };
 }
-

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { deepDecodeHtmlEntities } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function GET(
     // Fallback if column not yet pushed
   }
 
-  return NextResponse.json({ plant });
+  return NextResponse.json({ plant: deepDecodeHtmlEntities(plant) });
 }
 
 export async function PATCH(
@@ -70,7 +71,7 @@ export async function PATCH(
   }
 
   try {
-    const body = await req.json();
+    const body = deepDecodeHtmlEntities(await req.json());
     const wateringIntervalDays =
       body.wateringIntervalDays !== undefined
         ? Math.max(1, Math.min(90, Number(body.wateringIntervalDays)))
@@ -107,7 +108,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ plant: updated });
+    return NextResponse.json({ plant: deepDecodeHtmlEntities(updated) });
   } catch (error) {
     console.error("Update plant error:", error);
     return NextResponse.json(

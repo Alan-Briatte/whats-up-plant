@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DashboardClient, PlantItem } from "@/components/DashboardClient";
+import { decodeHtmlEntities } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +19,19 @@ export default async function HomePage() {
 
   const plants: PlantItem[] = rawPlants.map((p) => ({
     id: p.id,
-    nickname: p.nickname,
-    species: p.species,
-    scientificName: p.scientificName,
+    nickname: decodeHtmlEntities(p.nickname),
+    species: decodeHtmlEntities(p.species),
+    scientificName: p.scientificName
+      ? decodeHtmlEntities(p.scientificName)
+      : null,
     imageUrl: p.imageUrl,
-    location: p.location,
+    location: decodeHtmlEntities(p.location),
     wateringIntervalDays: p.wateringIntervalDays,
     lastWateredAt: p.lastWateredAt.toISOString(),
     nextWateringAt: p.nextWateringAt.toISOString(),
-    lightRequirement: p.lightRequirement,
-    humidityRequirement: p.humidityRequirement,
-    careNotes: p.careNotes,
+    lightRequirement: decodeHtmlEntities(p.lightRequirement),
+    humidityRequirement: decodeHtmlEntities(p.humidityRequirement),
+    careNotes: p.careNotes ? decodeHtmlEntities(p.careNotes) : null,
     healthStatus: p.healthStatus,
   }));
 
