@@ -123,12 +123,14 @@ export default function PlantDetailPage() {
   ]);
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
 
-  // Carnet de Santé photo management
+  // Carnet de Santé photo & status management
   const addPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [activeDiagIdForUpload, setActiveDiagIdForUpload] = useState<
     string | null
   >(null);
   const [uploadingDiagId, setUploadingDiagId] = useState<string | null>(null);
+  const [updatingDiagId, setUpdatingDiagId] = useState<string | null>(null);
+  const [deletingDiagId, setDeletingDiagId] = useState<string | null>(null);
 
   // Lightbox state
   const [lightbox, setLightbox] = useState<{
@@ -359,6 +361,69 @@ export default function PlantDetailPage() {
     if (res.ok) {
       setLightbox(null);
       await fetchPlant();
+    }
+  };
+
+  const handleToggleDiagnosisResolved = async (
+    diagId: string,
+    resolved: boolean
+  ) => {
+    setUpdatingDiagId(diagId);
+    try {
+      const res = await fetch(`/api/diagnoses/${diagId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolved }),
+      });
+      if (res.ok) {
+        await fetchPlant();
+        router.refresh();
+      }
+    } finally {
+      setUpdatingDiagId(null);
+    }
+  };
+
+  const handleToggleIssueResolved = async (
+    diagId: string,
+    issueIndex: number,
+    resolved: boolean
+  ) => {
+    setUpdatingDiagId(diagId);
+    try {
+      const res = await fetch(`/api/diagnoses/${diagId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issueIndex, resolved }),
+      });
+      if (res.ok) {
+        await fetchPlant();
+        router.refresh();
+      }
+    } finally {
+      setUpdatingDiagId(null);
+    }
+  };
+
+  const handleDeleteDiagnosis = async (diagId: string) => {
+    if (
+      !window.confirm(
+        "Voulez-vous vraiment supprimer ce diagnostic du carnet de santé ?"
+      )
+    ) {
+      return;
+    }
+    setDeletingDiagId(diagId);
+    try {
+      const res = await fetch(`/api/diagnoses/${diagId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await fetchPlant();
+        router.refresh();
+      }
+    } finally {
+      setDeletingDiagId(null);
     }
   };
 
@@ -948,8 +1013,11 @@ export default function PlantDetailPage() {
           ) : (
             <div className="space-y-4">
               {plant.diagnoses.map((diag) => {
-                let issues: DiagnosisIssue[] = [];
+                let issues: Array<
+                  DiagnosisIssue & { resolved?: boolean; resolvedAt?: string }
+                > = [];
                 let treatments: DiagnosisTreatmentStep[] = [];
+                let diagResolved = false;
                 const photos = getDiagnosisPhotos(diag);
                 const dateLabel = new Date(diag.createdAt).toLocaleDateString(
                   "fr-FR",
@@ -966,6 +1034,11 @@ export default function PlantDetailPage() {
                     JSON.parse(diag.treatmentJson)
                   );
                   treatments = parsedT.treatments || [];
+                  diagResolved =
+                    parsedT.resolved === true ||
+                    (Array.isArray(issues) &&
+                      issues.length > 0 &&
+                      issues.every((i) => i.resolved === true));
                 } catch {
                   // ignore
                 }
@@ -973,14 +1046,20 @@ export default function PlantDetailPage() {
                 return (
                   <div
                     key={diag.id}
-                    className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 space-y-3"
+                    className={`rounded-2xl border p-4 space-y-3 transition-colors ${
+                      diagResolved
+                        ? "border-emerald-200 bg-emerald-50/40"
+                        : "border-stone-200 bg-stone-50/70"
+                    }`}
                   >
                     {/* Header of diagnosis */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            diag.status === "CRITICAL"
+                            diagResolved
+                              ? "bg-stone-200 text-stone-600 line-through"
+                              : diag.status === "CRITICAL"
                               ? "bg-red-100 text-red-800"
                               : diag.status === "WARNING"
                               ? "bg-amber-100 text-amber-800"
@@ -994,29 +1073,79 @@ export default function PlantDetailPage() {
                             : "Saine"}{" "}
                           ({diag.confidence}%)
                         </span>
+
+                        {diagResolved && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Guéri / Résolu
+                          </span>
+                        )}
+
                         <span className="text-xs font-medium text-stone-500">
                           {dateLabel}
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={uploadingDiagId === diag.id}
-                        onClick={() => triggerAddPhotosToDiagnosis(diag.id)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-300 bg-white px-2.5 py-1 text-xs font-semibold text-botanical-800 hover:bg-botanical-50 disabled:opacity-50 transition-colors"
-                      >
-                        {uploadingDiagId === diag.id ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Ajout...
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="h-3.5 w-3.5 text-botanical-700" />
-                            + Ajouter des photos
-                          </>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {diag.status !== "HEALTHY" && (
+                          <button
+                            type="button"
+                            disabled={updatingDiagId === diag.id}
+                            onClick={() =>
+                              handleToggleDiagnosisResolved(
+                                diag.id,
+                                !diagResolved
+                              )
+                            }
+                            className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                              diagResolved
+                                ? "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                                : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                            }`}
+                            title={
+                              diagResolved
+                                ? "Marquer ce problème comme non résolu"
+                                : "Marquer ce diagnostic comme guéri / résolu"
+                            }
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            {diagResolved ? "Réouvrir" : "Marquer guéri"}
+                          </button>
                         )}
-                      </button>
+
+                        <button
+                          type="button"
+                          disabled={uploadingDiagId === diag.id}
+                          onClick={() => triggerAddPhotosToDiagnosis(diag.id)}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-botanical-300 bg-white px-2.5 py-1 text-xs font-semibold text-botanical-800 hover:bg-botanical-50 disabled:opacity-50 transition-colors"
+                        >
+                          {uploadingDiagId === diag.id ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Ajout...
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="h-3.5 w-3.5 text-botanical-700" />
+                              + Photos
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={deletingDiagId === diag.id}
+                          onClick={() => handleDeleteDiagnosis(diag.id)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          title="Supprimer ce diagnostic"
+                        >
+                          {deletingDiagId === diag.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Photo Gallery stored in Carnet de Santé */}
@@ -1063,13 +1192,80 @@ export default function PlantDetailPage() {
                     </p>
 
                     {issues.length > 0 && (
-                      <div className="text-xs text-amber-900 bg-amber-50/90 rounded-xl p-2.5 border border-amber-200/60">
-                        <strong>Détecté :</strong>{" "}
-                        {issues.map((i) => i.name).join(", ")}
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                          Soucis détectés ({issues.filter((i) => i.resolved).length}/
+                          {issues.length} résolu{issues.length > 1 ? "s" : ""})
+                        </p>
+                        <div className="space-y-2">
+                          {issues.map((issue, idx) => {
+                            const isResolved = Boolean(issue.resolved);
+                            return (
+                              <div
+                                key={idx}
+                                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border p-3 text-xs transition-colors ${
+                                  isResolved
+                                    ? "border-emerald-200 bg-emerald-50/50 text-stone-600"
+                                    : "border-amber-200/70 bg-amber-50/90 text-amber-900"
+                                }`}
+                              >
+                                <div className="space-y-0.5">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`font-bold ${
+                                        isResolved
+                                          ? "line-through text-stone-500"
+                                          : "text-stone-900"
+                                      }`}
+                                    >
+                                      {issue.name}
+                                    </span>
+                                    {isResolved && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                        ✓ Guéri
+                                      </span>
+                                    )}
+                                  </div>
+                                  {issue.symptoms && (
+                                    <p className="text-[11px] text-stone-600">
+                                      <strong>Symptômes :</strong>{" "}
+                                      {issue.symptoms}
+                                    </p>
+                                  )}
+                                  {issue.cause && (
+                                    <p className="text-[11px] text-stone-500">
+                                      <strong>Cause :</strong> {issue.cause}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={updatingDiagId === diag.id}
+                                  onClick={() =>
+                                    handleToggleIssueResolved(
+                                      diag.id,
+                                      idx,
+                                      !isResolved
+                                    )
+                                  }
+                                  className={`inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                                    isResolved
+                                      ? "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                                      : "border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50"
+                                  }`}
+                                >
+                                  <Check className="h-3 w-3" />
+                                  {isResolved ? "Non guéri" : "Résoudre ce souci"}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
-                    {treatments.length > 0 && (
+                    {treatments.length > 0 && !diagResolved && (
                       <div className="text-xs text-botanical-900 bg-botanical-50/90 rounded-xl p-2.5 border border-botanical-200/60 space-y-1">
                         <strong className="block">Plan de soin :</strong>
                         {treatments.map((t) => (
