@@ -12,6 +12,8 @@ export async function GET() {
     );
   }
 
+  const now = new Date();
+
   const [invitations, rawUsers] = await Promise.all([
     prisma.invitation.findMany({
       orderBy: { createdAt: "desc" },
@@ -26,6 +28,19 @@ export async function GET() {
         _count: {
           select: { plants: true },
         },
+        resetTokens: {
+          where: {
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            token: true,
+            expiresAt: true,
+            createdAt: true,
+          },
+        },
       },
     }),
   ]);
@@ -37,6 +52,7 @@ export async function GET() {
     createdAt: u.createdAt,
     plantsCount: u._count.plants,
     isAdmin: isAdminEmail(u.email),
+    activeResetToken: u.resetTokens[0]?.token || null,
   }));
 
   return NextResponse.json({ invitations, users });
@@ -53,6 +69,38 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
+
+    // Action 1 : Générer un lien de réinitialisation de mot de passe pour un utilisateur
+    if (body.action === "reset_password" && typeof body.userId === "string") {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: body.userId },
+      });
+      if (!targetUser) {
+        return NextResponse.json(
+          { error: "Utilisateur introuvable." },
+          { status: 404 }
+        );
+      }
+
+      const token = crypto.randomBytes(18).toString("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+      const resetRecord = await prisma.passwordResetToken.create({
+        data: {
+          userId: targetUser.id,
+          token,
+          expiresAt,
+        },
+      });
+
+      return NextResponse.json({
+        resetToken: resetRecord.token,
+        expiresAt: resetRecord.expiresAt,
+        userId: targetUser.id,
+      });
+    }
+
+    // Action 2 : Générer un lien d'invitation
     const label = typeof body.label === "string" ? body.label.trim() : null;
     const email =
       typeof body.email === "string" && body.email.trim()
@@ -79,9 +127,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ invitation });
   } catch (error) {
-    console.error("Create invitation error:", error);
+    console.error("Admin POST error:", error);
     return NextResponse.json(
-      { error: "Impossible de générer le lien d'invitation." },
+      { error: "Impossible d'exécuter cette action." },
       { status: 500 }
     );
   }
@@ -125,7 +173,6 @@ export async function DELETE(req: Request) {
         );
       }
 
-      // Supprime aussi les diagnostics liés à ce userId
       await prisma.healthDiagnosis.deleteMany({
         where: { userId: targetUser.id },
       });
@@ -148,4 +195,3 @@ export async function DELETE(req: Request) {
     );
   }
 }
-

@@ -1,8 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Leaf, Lock, Mail, ArrowRight, Sparkles, ShieldCheck } from "lucide-react";
+import {
+  Leaf,
+  Lock,
+  Mail,
+  ArrowRight,
+  Sparkles,
+  ShieldCheck,
+} from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -75,9 +83,17 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-700">
-              Mot de passe
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-stone-700">
+                Mot de passe
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-bold text-botanical-700 hover:underline"
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="absolute left-3.5 top-3 h-4 w-4 text-stone-400" />
               <input
