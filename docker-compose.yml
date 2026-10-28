@@ -1,8 +1,10 @@
 services:
   whatsupplant:
+    image: ghcr.io/alan-briatte/whats-up-plant:latest
     build:
       context: .
       dockerfile: Dockerfile
+    pull_policy: always
     container_name: whats-up-plant
     restart: unless-stopped
     ports:
@@ -14,4 +16,17 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - ./data:/app/data
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower-whatsupplant
+    restart: unless-stopped
+    environment:
+      - DOCKER_API_VERSION=1.44
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Si ton package GHCR est privé, décommente la ligne ci-dessous après avoir fait `docker login ghcr.io` sur le mini PC :
+      # - /root/.docker/config.json:/config.json:ro
+    command: --interval 60 --cleanup --label-enable
