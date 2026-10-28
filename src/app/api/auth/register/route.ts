@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { createSessionToken, setSessionCookie } from "@/lib/auth";
+import { createSessionToken, setSessionCookie, isAdminEmail } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
@@ -10,6 +10,7 @@ export async function POST(req: Request) {
     const name = (body.name || "").trim();
     const password = body.password || "";
     const seedDemoPlants = Boolean(body.seedDemoPlants);
+    const inviteToken = (body.inviteToken || "").trim();
 
     if (!email || !name || password.length < 6) {
       return NextResponse.json(
@@ -29,6 +30,62 @@ export async function POST(req: Request) {
       );
     }
 
+    // Seul l'email administrateur (ADMIN_EMAIL) peut s'inscrire sans jeton (s'il n'a pas encore créé son compte).
+    // Toute autre personne DOIT présenter un jeton d'invitation valide.
+    const isFirstAdminSetup = isAdminEmail(email);
+    let validInvitationId: string | null = null;
+
+    if (!isFirstAdminSetup) {
+      if (!inviteToken) {
+        return NextResponse.json(
+          {
+            error:
+              "Les inscriptions publiques sont fermées. Un lien d'invitation valide est requis.",
+          },
+          { status: 403 }
+        );
+      }
+
+      const invitation = await prisma.invitation.findUnique({
+        where: { token: inviteToken },
+      });
+
+      if (!invitation) {
+        return NextResponse.json(
+          { error: "Ce lien d'invitation est invalide ou a été révoqué." },
+          { status: 403 }
+        );
+      }
+
+      if (invitation.usedAt) {
+        return NextResponse.json(
+          { error: "Ce lien d'invitation a déjà été utilisé." },
+          { status: 403 }
+        );
+      }
+
+      if (new Date(invitation.expiresAt) < new Date()) {
+        return NextResponse.json(
+          { error: "Ce lien d'invitation a expiré." },
+          { status: 403 }
+        );
+      }
+
+      if (
+        invitation.email &&
+        invitation.email.trim().toLowerCase() !== email
+      ) {
+        return NextResponse.json(
+          {
+            error: `Cette invitation est réservée à l'adresse ${invitation.email}.`,
+          },
+          { status: 403 }
+        );
+      }
+
+      validInvitationId = invitation.id;
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -39,9 +96,20 @@ export async function POST(req: Request) {
       },
     });
 
+    if (validInvitationId) {
+      await prisma.invitation.update({
+        where: { id: validInvitationId },
+        data: {
+          usedAt: new Date(),
+          usedByEmail: user.email,
+          usedByName: user.name,
+        },
+      });
+    }
+
     if (seedDemoPlants) {
       const now = new Date();
-      const todayDue = new Date(now.getTime() - 2 * 60 * 60 * 1000); // Due today
+      const todayDue = new Date(now.getTime() - 2 * 60 * 60 * 1000);
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const inThreeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
       const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);

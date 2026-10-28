@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Leaf, Lock, Mail, ArrowRight, Sparkles } from "lucide-react";
+import { Leaf, Lock, Mail, ArrowRight, Sparkles, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,10 +39,10 @@ export default function LoginPage() {
     <div className="mx-auto mt-6 max-w-md">
       <div className="bento-card overflow-hidden rounded-3xl p-8">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-botanical-700 text-white shadow-md">
+          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-botanical-600 to-botanical-800 text-white shadow-md">
             <Leaf className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold text-stone-900">
+          <h1 className="text-2xl font-extrabold tracking-tight text-stone-900">
             Bon retour sur WhatsUpPlant
           </h1>
           <p className="mt-1 text-sm text-stone-600">
@@ -103,14 +102,9 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 border-t border-stone-100 pt-5 text-center">
-          <p className="text-sm text-stone-600">
-            Pas encore de compte ?{" "}
-            <Link
-              href="/register"
-              className="font-semibold text-botanical-700 hover:underline"
-            >
-              Créer un espace jardin
-            </Link>
+          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500">
+            <ShieldCheck className="h-4 w-4 text-botanical-700" />
+            Accès privé — Inscription uniquement sur lien d&apos;invitation
           </p>
         </div>
       </div>

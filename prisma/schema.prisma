@@ -69,3 +69,17 @@ model HealthDiagnosis {
   @@index([plantId])
   @@index([userId])
 }
+
+model Invitation {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  label       String?
+  email       String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  usedByEmail String?
+  usedByName  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([token])
+}

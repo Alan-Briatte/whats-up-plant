@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,6 +15,15 @@ import {
   Moon,
   Sun,
   Sparkles,
+  Shield,
+  UserPlus,
+  Copy,
+  Check,
+  Trash2,
+  Users,
+  X,
+  Loader2,
+  Link2,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -22,12 +31,34 @@ interface NavbarProps {
     id: string;
     name: string;
     email: string;
+    isAdmin?: boolean;
   } | null;
 }
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+interface AdminInvitationItem {
+  id: string;
+  token: string;
+  label: string | null;
+  email: string | null;
+  expiresAt: string;
+  usedAt: string | null;
+  usedByEmail: string | null;
+  usedByName: string | null;
+  createdAt: string;
+}
+
+interface AdminUserItem {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  plantsCount: number;
+  isAdmin: boolean;
 }
 
 export function Navbar({ user }: NavbarProps) {
@@ -38,6 +69,19 @@ export function Navbar({ user }: NavbarProps) {
   const [notifPermission, setNotifPermission] =
     useState<NotificationPermission>("default");
   const [isDark, setIsDark] = useState(false);
+
+  // Admin Modal states
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminTab, setAdminTab] = useState<"invites" | "users">("invites");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [invitations, setInvitations] = useState<AdminInvitationItem[]>([]);
+  const [usersList, setUsersList] = useState<AdminUserItem[]>([]);
+  const [inviteLabel, setInviteLabel] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteDays, setInviteDays] = useState(7);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains("dark"));
@@ -60,6 +104,103 @@ export function Navbar({ user }: NavbarProps) {
         handleBeforeInstallPrompt
       );
   }, []);
+
+  const fetchAdminData = useCallback(async () => {
+    setAdminLoading(true);
+    try {
+      const res = await fetch("/api/admin/invitations");
+      if (res.ok) {
+        const data = await res.json();
+        setInvitations(data.invitations || []);
+        setUsersList(data.users || []);
+      }
+    } finally {
+      setAdminLoading(false);
+    }
+  }, []);
+
+  const openAdminModal = () => {
+    setAdminOpen(true);
+    fetchAdminData();
+  };
+
+  const buildInviteUrl = (token: string) => {
+    if (typeof window === "undefined") return `/register?invite=${token}`;
+    return `${window.location.origin}/register?invite=${token}`;
+  };
+
+  const copyInviteLink = async (id: string, token: string) => {
+    const url = buildInviteUrl(token);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleCreateInvitation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingInvite(true);
+    try {
+      const res = await fetch("/api/admin/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: inviteLabel,
+          email: inviteEmail,
+          expiresInDays: inviteDays,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.invitation) {
+        setInvitations((prev) => [data.invitation, ...prev]);
+        setInviteLabel("");
+        setInviteEmail("");
+        await copyInviteLink(data.invitation.id, data.invitation.token);
+      }
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  const handleDeleteInvitation = async (inviteId: string) => {
+    setDeletingId(inviteId);
+    try {
+      const res = await fetch(
+        `/api/admin/invitations?inviteId=${encodeURIComponent(inviteId)}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        setInvitations((prev) => prev.filter((i) => i.id !== inviteId));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteUser = async (target: AdminUserItem) => {
+    if (
+      !window.confirm(
+        `Voulez-vous vraiment supprimer le compte de "${target.name}" (${target.email}) ainsi que ses ${target.plantsCount} plante(s) ?`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(target.id);
+    try {
+      const res = await fetch(
+        `/api/admin/invitations?userId=${encodeURIComponent(target.id)}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        setUsersList((prev) => prev.filter((u) => u.id !== target.id));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const toggleTheme = () => {
     const nextDark = !isDark;
@@ -143,6 +284,290 @@ export function Navbar({ user }: NavbarProps) {
 
   return (
     <>
+      {/* Admin Invitations & Users Modal */}
+      {adminOpen && user.isAdmin && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => setAdminOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-stone-100 bg-botanical-50/70 px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-botanical-700 text-white shadow-sm">
+                  <Shield className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-stone-900">
+                    Administration & Liens d&apos;invitation
+                  </h2>
+                  <p className="text-xs text-stone-600">
+                    Générez des invitations à usage unique et gérez les comptes
+                    autorisés
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-200/60 hover:text-stone-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-stone-200/80 bg-stone-50/70 px-6 pt-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAdminTab("invites")}
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-extrabold transition-colors ${
+                  adminTab === "invites"
+                    ? "border-botanical-700 text-botanical-800"
+                    : "border-transparent text-stone-500 hover:text-stone-800"
+                }`}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Liens d&apos;invitation ({invitations.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab("users")}
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-extrabold transition-colors ${
+                  adminTab === "users"
+                    ? "border-botanical-700 text-botanical-800"
+                    : "border-transparent text-stone-500 hover:text-stone-800"
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Comptes inscrits ({usersList.length})
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 max-h-[75vh] overflow-y-auto space-y-5">
+              {adminLoading ? (
+                <div className="py-12 text-center text-xs text-stone-500 flex flex-col items-center gap-2">
+                  <Loader2 className="h-6 w-6 animate-spin text-botanical-700" />
+                  Chargement des données d&apos;administration...
+                </div>
+              ) : adminTab === "invites" ? (
+                <>
+                  {/* Create Invite Form */}
+                  <form
+                    onSubmit={handleCreateInvitation}
+                    className="rounded-2xl border border-botanical-200 bg-botanical-50/40 p-4 space-y-3"
+                  >
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-botanical-900 flex items-center gap-1.5">
+                      <Link2 className="h-3.5 w-3.5 text-botanical-700" />
+                      Nouveau lien d&apos;invitation à usage unique
+                    </h3>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                          Note / Destinataire (optionnel)
+                        </label>
+                        <input
+                          type="text"
+                          value={inviteLabel}
+                          onChange={(e) => setInviteLabel(e.target.value)}
+                          placeholder="Ex: Pour Camille"
+                          className="w-full rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs focus:border-botanical-600 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                          Email imposé (optionnel)
+                        </label>
+                        <input
+                          type="email"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          placeholder="Libre si vide"
+                          className="w-full rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs focus:border-botanical-600 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                          Validité du lien
+                        </label>
+                        <select
+                          value={inviteDays}
+                          onChange={(e) =>
+                            setInviteDays(Number(e.target.value) || 7)
+                          }
+                          className="w-full rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs focus:border-botanical-600 focus:outline-none"
+                        >
+                          <option value={1}>24 heures (1 jour)</option>
+                          <option value={7}>7 jours</option>
+                          <option value={30}>30 jours</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={creatingInvite}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-botanical-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-botanical-800 disabled:opacity-50 transition-colors"
+                      >
+                        {creatingInvite ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-3.5 w-3.5" />
+                        )}
+                        Générer & copier le lien
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Invitations List */}
+                  <div className="space-y-2.5">
+                    {invitations.length === 0 ? (
+                      <p className="py-6 text-center text-xs text-stone-500">
+                        Aucun lien d&apos;invitation généré pour le moment.
+                      </p>
+                    ) : (
+                      invitations.map((inv) => {
+                        const isUsed = Boolean(inv.usedAt);
+                        const isExpired =
+                          !isUsed && new Date(inv.expiresAt) < new Date();
+
+                        return (
+                          <div
+                            key={inv.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3.5 text-xs"
+                          >
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-stone-900">
+                                  {inv.label || "Invitation sans note"}
+                                </span>
+                                {isUsed ? (
+                                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                    ✓ Utilisée par {inv.usedByName} (
+                                    {inv.usedByEmail})
+                                  </span>
+                                ) : isExpired ? (
+                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                    Expirée
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800">
+                                    Active • Expire le{" "}
+                                    {new Date(inv.expiresAt).toLocaleDateString(
+                                      "fr-FR"
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-stone-500 truncate font-mono">
+                                {buildInviteUrl(inv.token)}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {!isUsed && !isExpired && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    copyInviteLink(inv.id, inv.token)
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-xl border border-botanical-200 bg-white px-3 py-1.5 text-xs font-bold text-botanical-800 hover:bg-botanical-50 transition-colors"
+                                >
+                                  {copiedId === inv.id ? (
+                                    <>
+                                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      Copié !
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-3.5 w-3.5" />
+                                      Copier le lien
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={deletingId === inv.id}
+                                onClick={() => handleDeleteInvitation(inv.id)}
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                                title="Révoquer / supprimer cette invitation"
+                              >
+                                {deletingId === inv.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* Users Tab */
+                <div className="space-y-2.5">
+                  {usersList.map((u) => (
+                    <div
+                      key={u.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3.5 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-stone-900">
+                            {u.name}
+                          </span>
+                          {u.isAdmin && (
+                            <span className="rounded-full bg-botanical-100 px-2 py-0.5 text-[10px] font-extrabold text-botanical-800">
+                              Administrateur
+                            </span>
+                          )}
+                          <span className="rounded-full bg-stone-200/80 px-2 py-0.5 text-[10px] font-bold text-stone-700">
+                            {u.plantsCount} plante{u.plantsCount > 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 mt-0.5">
+                          {u.email} • Inscrit le{" "}
+                          {new Date(u.createdAt).toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
+
+                      {!u.isAdmin && (
+                        <button
+                          type="button"
+                          disabled={deletingId === u.id}
+                          onClick={() => handleDeleteUser(u)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                        >
+                          {deletingId === u.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Supprimer
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating Pill Glass Top Header */}
       <header className="sticky top-0 z-30 pt-3 px-4">
         <div className="mx-auto max-w-6xl">
@@ -191,6 +616,18 @@ export function Navbar({ user }: NavbarProps) {
 
             {/* Right Actions */}
             <div className="flex items-center gap-1.5 sm:gap-2">
+              {user.isAdmin && (
+                <button
+                  type="button"
+                  onClick={openAdminModal}
+                  className="flex items-center gap-1.5 rounded-xl border border-botanical-300 bg-botanical-50 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-botanical-800 hover:bg-botanical-100 transition-colors"
+                  title="Générer des liens d'invitation et gérer les comptes"
+                >
+                  <UserPlus className="h-3.5 w-3.5 text-botanical-700" />
+                  <span className="hidden sm:inline">Inviter</span>
+                </button>
+              )}
+
               {deferredPrompt && (
                 <button
                   onClick={handleInstallPwa}

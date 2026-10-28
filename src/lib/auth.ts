@@ -10,10 +10,22 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
+export function getAdminEmail(): string {
+  return (process.env.ADMIN_EMAIL || "briatte.alan@gmail.com")
+    .trim()
+    .toLowerCase();
+}
+
+export function isAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === getAdminEmail();
+}
+
 export interface SessionUser {
   id: string;
   email: string;
   name: string;
+  isAdmin?: boolean;
 }
 
 export async function createSessionToken(user: SessionUser): Promise<string> {
@@ -42,6 +54,7 @@ export async function verifySessionToken(
         id: payload.id,
         email: payload.email,
         name: payload.name,
+        isAdmin: isAdminEmail(payload.email),
       };
     }
     return null;
