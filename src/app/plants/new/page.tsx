@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -27,13 +27,17 @@ const ROOM_PRESETS = [
   "Véranda / Balcon",
 ];
 
+const CUSTOM_LOCATION_VALUE = "__CUSTOM__";
+
 export default function NewPlantPage() {
   const router = useRouter();
   const [imageUrl, setImageUrl] = useState("");
   const [nickname, setNickname] = useState("");
   const [species, setSpecies] = useState("");
   const [scientificName, setScientificName] = useState("");
-  const [location, setLocation] = useState("Salon");
+  const [roomOptions, setRoomOptions] = useState<string[]>(ROOM_PRESETS);
+  const [selectedRoom, setSelectedRoom] = useState<string>("Salon");
+  const [customLocation, setCustomLocation] = useState<string>("");
   const [wateringIntervalDays, setWateringIntervalDays] = useState(7);
   const [lightRequirement, setLightRequirement] = useState(
     "Lumière vive indirecte"
@@ -53,6 +57,28 @@ export default function NewPlantPage() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const effectiveLocation =
+    selectedRoom === CUSTOM_LOCATION_VALUE
+      ? customLocation.trim()
+      : selectedRoom;
+
+  // Récupère les pièces personnalisées déjà utilisées par d'autres plantes de l'utilisateur
+  useEffect(() => {
+    fetch("/api/plants")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.plants)) {
+          const existingRooms = data.plants
+            .map((p: { location?: string }) => (p.location || "").trim())
+            .filter(Boolean);
+          setRoomOptions(
+            Array.from(new Set([...ROOM_PRESETS, ...existingRooms]))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleIdentifyWithAI = async () => {
     if (!imageUrl) {
@@ -122,7 +148,7 @@ export default function NewPlantPage() {
         body: JSON.stringify({
           species,
           scientificName,
-          location,
+          location: effectiveLocation || "Salon",
           exclude: excludeList,
         }),
       });
@@ -149,6 +175,10 @@ export default function NewPlantPage() {
       setError("Veuillez renseigner un surnom et l'espèce de la plante.");
       return;
     }
+    if (selectedRoom === CUSTOM_LOCATION_VALUE && !customLocation.trim()) {
+      setError("Veuillez saisir le nom de votre pièce ou emplacement personnalisé.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -159,7 +189,7 @@ export default function NewPlantPage() {
           nickname,
           species,
           scientificName,
-          location,
+          location: effectiveLocation || "Salon",
           wateringIntervalDays,
           lightRequirement,
           humidityRequirement,
@@ -345,16 +375,31 @@ export default function NewPlantPage() {
                 Pièce / Emplacement
               </label>
               <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={selectedRoom}
+                onChange={(e) => setSelectedRoom(e.target.value)}
                 className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-sm focus:border-botanical-600 focus:bg-white focus:outline-none"
               >
-                {ROOM_PRESETS.map((room) => (
+                {roomOptions.map((room) => (
                   <option key={room} value={room}>
                     {room}
                   </option>
                 ))}
+                <option value={CUSTOM_LOCATION_VALUE}>
+                  + Autre emplacement personnalisé...
+                </option>
               </select>
+
+              {selectedRoom === CUSTOM_LOCATION_VALUE && (
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={customLocation}
+                  onChange={(e) => setCustomLocation(e.target.value)}
+                  placeholder="Saisir la pièce (ex: Terrasse, Serre, Escalier...)"
+                  className="mt-2 w-full rounded-xl border border-botanical-400 bg-white px-3.5 py-2 text-sm focus:border-botanical-600 focus:outline-none"
+                />
+              )}
             </div>
           </div>
 
